@@ -55,5 +55,23 @@ services:
       - ./app:/app/app
     command: arq app.workers.arq_worker.WorkerSettings
 
+  whatsapp-ingest:
+    build: ./ingest/whatsapp-baileys
+    env_file: .env
+    environment:
+      WATCHMATCH_WEBHOOK_URL: http://api:8000/api/v1/ingest/webhook
+      WATCHMATCH_HMAC_SECRET: ${WEBHOOK_HMAC_SECRET}
+      WA_AUTH_DIR: /app/auth
+    depends_on:
+      api:
+        condition: service_started
+    volumes:
+      - whatsapp_auth:/app/auth
+    stdin_open: true
+    tty: true
+    restart: unless-stopped
+    profiles: ["whatsapp"]
+
 volumes:
   pgdata:
+  whatsapp_auth:

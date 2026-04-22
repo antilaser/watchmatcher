@@ -1,0 +1,114 @@
+[
+  {
+    "brand": "Rolex",
+    "family": "Submariner Date",
+    "reference": "126610LV",
+    "nickname": "Starbucks",
+    "aliases": [
+      {"text": "Starbucks", "type": "NICKNAME", "weight": 0.95},
+      {"text": "Sub Date Green", "type": "SHORTHAND", "weight": 0.9},
+      {"text": "Sub Green", "type": "SHORTHAND", "weight": 0.8},
+      {"text": "126610LV", "type": "REFERENCE", "weight": 1.0}
+    ]
+  },
+  {
+    "brand": "Rolex",
+    "family": "Submariner Date",
+    "reference": "126610LN",
+    "nickname": "Sub Date Black",
+    "aliases": [
+      {"text": "126610LN", "type": "REFERENCE", "weight": 1.0},
+      {"text": "Sub Date Black", "type": "SHORTHAND", "weight": 0.85}
+    ]
+  },
+  {
+    "brand": "Rolex",
+    "family": "Submariner",
+    "reference": "116610LV",
+    "nickname": "Hulk",
+    "aliases": [
+      {"text": "Hulk", "type": "NICKNAME", "weight": 0.97},
+      {"text": "116610LV", "type": "REFERENCE", "weight": 1.0}
+    ]
+  },
+  {
+    "brand": "Rolex",
+    "family": "Daytona",
+    "reference": "116500LN",
+    "nickname": "White Daytona",
+    "aliases": [
+      {"text": "116500LN", "type": "REFERENCE", "weight": 1.0},
+      {"text": "Daytona White Ceramic", "type": "SHORTHAND", "weight": 0.85},
+      {"text": "Panda Daytona", "type": "NICKNAME", "weight": 0.7}
+    ]
+  },
+  {
+    "brand": "Rolex",
+    "family": "Daytona",
+    "reference": "116500LN-BLK",
+    "nickname": "Black Daytona",
+    "aliases": [
+      {"text": "Black Daytona", "type": "SHORTHAND", "weight": 0.8}
+    ]
+  },
+  {
+    "brand": "Rolex",
+    "family": "GMT-Master II",
+    "reference": "126710BLRO",
+    "nickname": "Pepsi",
+    "aliases": [
+      {"text": "Pepsi", "type": "NICKNAME", "weight": 0.95},
+      {"text": "126710BLRO", "type": "REFERENCE", "weight": 1.0}
+    ]
+  },
+  {
+    "brand": "Rolex",
+    "family": "GMT-Master II",
+    "reference": "126710BLNR",
+    "nickname": "Batman",
+    "aliases": [
+      {"text": "Batman", "type": "NICKNAME", "weight": 0.95},
+      {"text": "Batgirl", "type": "NICKNAME", "weight": 0.85},
+      {"text": "126710BLNR", "type": "REFERENCE", "weight": 1.0}
+    ]
+  },
+  {
+    "brand": "Patek Philippe",
+    "family": "Nautilus",
+    "reference": "5711/1A-010",
+    "nickname": "Nautilus Blue",
+    "aliases": [
+      {"text": "5711", "type": "SHORTHAND", "weight": 0.85},
+      {"text": "Nautilus 5711", "type": "SHORTHAND", "weight": 0.95},
+      {"text": "5711/1A", "type": "REFERENCE", "weight": 0.95}
+    ]
+  },
+  {
+    "brand": "Patek Philippe",
+    "family": "Aquanaut",
+    "reference": "5167A-001",
+    "nickname": "Aquanaut Black",
+    "aliases": [
+      {"text": "5167A", "type": "SHORTHAND", "weight": 0.9}
+    ]
+  },
+  {
+    "brand": "Audemars Piguet",
+    "family": "Royal Oak",
+    "reference": "15500ST",
+    "nickname": "Royal Oak Steel",
+    "aliases": [
+      {"text": "RO 15500", "type": "SHORTHAND", "weight": 0.9},
+      {"text": "15500ST", "type": "REFERENCE", "weight": 1.0}
+    ]
+  },
+  {
+    "brand": "Audemars Piguet",
+    "family": "Royal Oak Offshore",
+    "reference": "26470ST",
+    "nickname": "Offshore Steel",
+    "aliases": [
+      {"text": "26470ST", "type": "REFERENCE", "weight": 1.0}
+    ]
+  }
+]

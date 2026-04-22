@@ -1,0 +1,72 @@
+[
+  {
+    "external_message_id": "fixt-001",
+    "external_group_id": "sellers-eu",
+    "group_name": "Sellers EU",
+    "sender_name": "Marco",
+    "text_body": "FS Rolex 126610LV Starbucks, full set 2023, mint condition. €13,500 firm. Located in Germany.",
+    "message_type": "text",
+    "original_timestamp": "2026-04-20T09:15:00Z",
+    "metadata": {}
+  },
+  {
+    "external_message_id": "fixt-002",
+    "external_group_id": "buyers-eu",
+    "group_name": "Buyers EU",
+    "sender_name": "Anna",
+    "text_body": "WTB Rolex Starbucks 126610LV, budget around 14000 EUR, full set preferred",
+    "message_type": "text",
+    "original_timestamp": "2026-04-20T10:02:00Z",
+    "metadata": {}
+  },
+  {
+    "external_message_id": "fixt-003",
+    "external_group_id": "sellers-eu",
+    "group_name": "Sellers EU",
+    "sender_name": "Luca",
+    "text_body": "Available: AP Royal Oak 15500ST, watch only, €27.5k OBO",
+    "message_type": "text",
+    "original_timestamp": "2026-04-20T11:00:00Z",
+    "metadata": {}
+  },
+  {
+    "external_message_id": "fixt-004",
+    "external_group_id": "buyers-eu",
+    "group_name": "Buyers EU",
+    "sender_name": "Pierre",
+    "text_body": "Looking for Patek 5711, no specific budget yet, message me with offers",
+    "message_type": "text",
+    "original_timestamp": "2026-04-20T11:30:00Z",
+    "metadata": {}
+  },
+  {
+    "external_message_id": "fixt-005",
+    "external_group_id": "sellers-eu",
+    "group_name": "Sellers EU",
+    "sender_name": "Random",
+    "text_body": "good morning everyone hope you have a great day",
+    "message_type": "text",
+    "original_timestamp": "2026-04-20T12:00:00Z",
+    "metadata": {}
+  },
+  {
+    "external_message_id": "fixt-006",
+    "external_group_id": "sellers-eu",
+    "group_name": "Sellers EU",
+    "sender_name": "Vito",
+    "text_body": "продам Rolex Batman 126710BLNR, full set, 18.5k евро, торг возможен",
+    "message_type": "text",
+    "original_timestamp": "2026-04-20T13:15:00Z",
+    "metadata": {}
+  },
+  {
+    "external_message_id": "fixt-007",
+    "external_group_id": "buyers-eu",
+    "group_name": "Buyers EU",
+    "sender_name": "Sergey",
+    "text_body": "куплю Rolex Batman 126710BLNR, бюджет до 19500 EUR, full set обязательно",
+    "message_type": "text",
+    "original_timestamp": "2026-04-20T14:00:00Z",
+    "metadata": {}
+  }
+]

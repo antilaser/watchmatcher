@@ -27,6 +27,18 @@ services:
       timeout: 3s
       retries: 10
 
+  # Same-origin: leave NEXT_PUBLIC_API_BASE_URL out of .env (or empty). Browser uses https://<host>/api/v1.
+  # Requires nginx: / → this service, /api/v1/ → api (see deploy/nginx-https-same-origin.example.conf).
+  dashboard:
+    build:
+      context: ./frontend
+      args:
+        NEXT_PUBLIC_API_BASE_URL: ${NEXT_PUBLIC_API_BASE_URL:-}
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:${DASHBOARD_HOST_PORT:-3000}:3000"
+    profiles: ["dashboard"]
+
   api:
     build: .
     restart: unless-stopped

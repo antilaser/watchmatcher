@@ -47,6 +47,11 @@ coverage.xml
 .env
 .env.*
 !.env.example
+!frontend/.env.example
+
+# Node / Next
+**/node_modules/
+**/.next/
 
 # OS
 .DS_Store

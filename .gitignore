@@ -54,6 +54,8 @@ Thumbs.db
 
 # Project
 *.log
+*.ppk
+.ssh_known_hosts
 logs/
 data/local/
 .alembic_local/

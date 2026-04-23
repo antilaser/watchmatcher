@@ -1,8 +1,10 @@
 import {
   default as makeWASocket,
+  Browsers,
   DisconnectReason,
   useMultiFileAuthState,
   fetchLatestBaileysVersion,
+  type WASocket,
   type WAMessage,
 } from "@whiskeysockets/baileys";
 import { Boom } from "@hapi/boom";
@@ -13,6 +15,15 @@ import { config } from "./config.js";
 import { enqueue, flush } from "./forwarder.js";
 
 const log = pino({ level: config.logLevel, name: "wa-ingest" });
+
+/** 408 is both `connectionLost` and `timedOut` in Baileys enum */
+function disconnectLabel(code: number | undefined): string {
+  if (code === undefined) return "unknown";
+  const names = Object.entries(DisconnectReason).filter(([, v]) => v === code).map(([k]) => k);
+  return names.length ? names.join("|") : `code_${code}`;
+}
+
+let currentSocket: WASocket | null = null;
 
 function shouldForward(msg: WAMessage): boolean {
   if (!msg.message) return false;
@@ -38,6 +49,15 @@ function extractText(msg: WAMessage): string | null {
 }
 
 async function start(): Promise<void> {
+  if (currentSocket) {
+    try {
+      currentSocket.end(undefined);
+    } catch {
+      /* ignore */
+    }
+    currentSocket = null;
+  }
+
   const { state, saveCreds } = await useMultiFileAuthState(config.authDir);
   const { version, isLatest } = await fetchLatestBaileysVersion();
   log.info({ version, isLatest }, "baileys_starting");
@@ -48,7 +68,16 @@ async function start(): Promise<void> {
     version,
     auth: state,
     logger: pino({ level: "warn" }),
+    browser: Browsers.macOS("Chrome"),
+    connectTimeoutMs: 90_000,
+    defaultQueryTimeoutMs: 120_000,
+    keepAliveIntervalMs: 20_000,
+    qrTimeout: 180_000,
+    markOnlineOnConnect: false,
+    syncFullHistory: false,
+    shouldSyncHistoryMessage: () => false,
   });
+  currentSocket = sock;
 
   sock.ev.on("creds.update", saveCreds);
 
@@ -59,10 +88,19 @@ async function start(): Promise<void> {
       qrcode.generate(qr, { small: true });
     }
     if (connection === "close") {
-      const code = (lastDisconnect?.error as Boom | undefined)?.output?.statusCode;
+      const boom = lastDisconnect?.error as Boom | undefined;
+      const code = boom?.output?.statusCode;
       const reconnect = code !== DisconnectReason.loggedOut;
-      log.warn({ code, reconnect }, "connection_closed");
-      if (reconnect) setTimeout(() => void start(), 2000);
+      const reason = disconnectLabel(code);
+      log.warn(
+        { code, reason, reconnect, detail: boom?.message },
+        "connection_closed",
+      );
+      if (reconnect) {
+        const delayMs = code === 408 ? 12_000 : 3_000;
+        log.info({ delayMs }, "reconnect_scheduled");
+        setTimeout(() => void start(), delayMs);
+      }
     } else if (connection === "open") {
       log.info("connection_open");
     }

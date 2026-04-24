@@ -27,6 +27,7 @@ class IngestionService:
         source_account: SourceAccount,
         external_group_id: str,
         group_name: str | None,
+        invite_code: str | None = None,
     ) -> Group:
         stmt = select(Group).where(
             Group.source_account_id == source_account.id,
@@ -34,12 +35,15 @@ class IngestionService:
         )
         existing = (await self.session.execute(stmt)).scalar_one_or_none()
         if existing:
+            if invite_code and not existing.invite_code:
+                existing.invite_code = invite_code
             return existing
 
         group = Group(
             workspace_id=workspace_id,
             source_account_id=source_account.id,
             external_group_id=external_group_id,
+            invite_code=invite_code,
             group_name=group_name or external_group_id,
             group_type=GroupType.UNKNOWN,
             is_active=True,
@@ -53,17 +57,27 @@ class IngestionService:
         workspace: Workspace,
         source_account: SourceAccount,
         message: IncomingMessage,
-    ) -> tuple[RawMessage, bool]:
+    ) -> tuple[RawMessage | None, bool]:
         """Insert a raw message; return (row, created).
 
         Idempotent: the same message hash will not be stored twice.
+        If the group is disabled in the dashboard (`is_active=False`), returns
+        ``(None, False)`` and does not persist anything.
         """
         group = await self.get_or_create_group(
             workspace_id=workspace.id,
             source_account=source_account,
             external_group_id=message.external_group_id,
             group_name=message.group_name,
+            invite_code=message.group_invite_code,
         )
+        if not group.is_active:
+            log.info(
+                "ingest_skipped_inactive_group",
+                external_group_id=message.external_group_id,
+                group_id=str(group.id),
+            )
+            return None, False
 
         dedupe = compute_dedupe_hash(
             source_account=source_account.account_name,
@@ -81,17 +95,23 @@ class IngestionService:
         if existing:
             return existing, False
 
+        meta = dict(message.metadata)
+        if message.image_base64:
+            meta["has_ingest_image"] = True
+        if message.image_mime_type:
+            meta["image_mime_type"] = message.image_mime_type
+
         row = RawMessage(
             workspace_id=workspace.id,
             group_id=group.id,
             external_message_id=message.external_message_id,
             sender_name=message.sender_name,
             sender_external_id=message.sender_external_id,
-            text_body=message.text_body,
+            text_body=message.text_body or "",
             message_type=message.message_type,
             original_timestamp=message.original_timestamp,
             ingested_at=datetime.now(timezone.utc),
-            metadata_json=message.metadata,
+            metadata_json=meta,
             dedupe_hash=dedupe,
             processing_status=ProcessingStatus.PENDING,
         )
@@ -110,14 +130,31 @@ class IngestionService:
         workspace: Workspace,
         source_account: SourceAccount,
         messages: list[IncomingMessage],
-    ) -> tuple[list[RawMessage], int]:
-        """Returns (created_rows, skipped_count)."""
+    ) -> tuple[list[RawMessage], int, int, list[tuple[UUID, str, str]]]:
+        """Returns (created_rows, skipped_duplicates, skipped_inactive_groups, pending_images).
+
+        Each pending image is ``(raw_message_id, base64, mime_type)`` for Redis
+        after the transaction commits.
+        """
         created: list[RawMessage] = []
-        skipped = 0
+        pending_images: list[tuple[UUID, str, str]] = []
+        skipped_duplicates = 0
+        skipped_inactive = 0
         for m in messages:
             row, was_created = await self.ingest(workspace, source_account, m)
+            if row is None:
+                skipped_inactive += 1
+                continue
             if was_created:
                 created.append(row)
+                if m.image_base64 and m.image_base64.strip():
+                    pending_images.append(
+                        (
+                            row.id,
+                            m.image_base64.strip(),
+                            m.image_mime_type or "image/jpeg",
+                        )
+                    )
             else:
-                skipped += 1
-        return created, skipped
+                skipped_duplicates += 1
+        return created, skipped_duplicates, skipped_inactive, pending_images

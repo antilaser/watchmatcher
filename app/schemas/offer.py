@@ -20,6 +20,7 @@ class SellOfferOut(BaseModel):
     brand_raw: str | None
     family_raw: str | None
     reference_raw: str | None
+    manufacture_year: int | None = None
     condition_raw: str | None
     asking_price: Decimal | None
     currency: str | None
@@ -28,3 +29,11 @@ class SellOfferOut(BaseModel):
     confidence: float
     created_at: datetime
     closed_at: datetime | None
+
+
+class SellListingOut(SellOfferOut):
+    """Sell offer joined with source group and WhatsApp message time."""
+
+    group_name: str
+    message_at: datetime
+    text_preview: str | None = None

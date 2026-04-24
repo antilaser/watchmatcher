@@ -27,7 +27,7 @@ class TelegramClient:
         chat_id: str,
         text: str,
         reply_markup: dict | None = None,
-        parse_mode: str = "HTML",
+        parse_mode: str | None = None,
     ) -> bool:
         if not self._enabled:
             log.info("telegram_disabled_send_skipped", chat_id=chat_id)
@@ -37,9 +37,10 @@ class TelegramClient:
         payload: dict = {
             "chat_id": chat_id,
             "text": text,
-            "parse_mode": parse_mode,
             "disable_web_page_preview": True,
         }
+        if parse_mode is not None:
+            payload["parse_mode"] = parse_mode
         if reply_markup:
             payload["reply_markup"] = reply_markup
 

@@ -62,8 +62,13 @@ async def main() -> None:
         provider = FakeProvider.from_json_file(SEED_DIR / "sample_messages.json")
         msgs = await provider.poll_messages()
         ingestion = IngestionService(session)
-        rows, skipped = await ingestion.ingest_batch(ws, src, msgs)
-        log.info("messages_ingested", created=len(rows), skipped=skipped)
+        rows, skipped_dupes, skipped_inactive, _pending = await ingestion.ingest_batch(ws, src, msgs)
+        log.info(
+            "messages_ingested",
+            created=len(rows),
+            skipped_duplicates=skipped_dupes,
+            skipped_inactive_groups=skipped_inactive,
+        )
 
         pipeline = PipelineService(session)
         for r in rows:

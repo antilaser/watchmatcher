@@ -3,9 +3,11 @@
 from __future__ import annotations
 
 from contextlib import asynccontextmanager
+from pathlib import Path
 
-from fastapi import FastAPI
+from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import FileResponse
 
 from app import __version__
 from app.api.v1.routes import (
@@ -13,12 +15,14 @@ from app.api.v1.routes import (
     groups,
     health,
     ingest,
+    listings,
     matches,
     messages,
     offers,
     requests,
     review,
     sources,
+    workspace,
 )
 from app.core.config import get_settings
 from app.core.logging import configure_logging, get_logger
@@ -63,6 +67,24 @@ def create_app() -> FastAPI:
     app.include_router(alerts.router, prefix=prefix)
     app.include_router(review.router, prefix=prefix)
     app.include_router(ingest.router, prefix=prefix)
+    app.include_router(workspace.router, prefix=prefix)
+    app.include_router(listings.router, prefix=prefix)
+
+    ui_dir = Path(__file__).resolve().parent / "ui"
+    ui_index = ui_dir / "index.html"
+    ui_listings = ui_dir / "listings.html"
+
+    @app.get("/dashboard")
+    async def dashboard_page() -> FileResponse:
+        if not ui_index.is_file():
+            raise HTTPException(status_code=404, detail="dashboard UI not found")
+        return FileResponse(ui_index, media_type="text/html; charset=utf-8")
+
+    @app.get("/listings")
+    async def listings_page() -> FileResponse:
+        if not ui_listings.is_file():
+            raise HTTPException(status_code=404, detail="listings UI not found")
+        return FileResponse(ui_listings, media_type="text/html; charset=utf-8")
 
     return app
 

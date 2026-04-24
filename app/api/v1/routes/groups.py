@@ -21,6 +21,7 @@ class GroupOut(BaseModel):
     workspace_id: UUID
     source_account_id: UUID
     external_group_id: str
+    invite_code: str | None = None
     group_name: str
     group_type: GroupType
     is_active: bool

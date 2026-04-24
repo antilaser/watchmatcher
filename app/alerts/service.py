@@ -8,12 +8,13 @@ from decimal import Decimal
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.alerts.formatter import format_match_summary
+from app.alerts.formatter import append_original_messages_to_summary, format_match_summary
 from app.alerts.telegram import TelegramClient, build_match_inline_keyboard
 from app.core.config import get_settings
 from app.core.enums import AlertChannel, AlertStatus, AlertType
 from app.core.logging import get_logger
-from app.models import Alert, BuyRequest, Match, SellOffer
+from app.matching.calibration import effective_unpriced_alert_min
+from app.models import Alert, BuyRequest, Match, RawMessage, SellOffer, Workspace
 
 log = get_logger(__name__)
 
@@ -28,20 +29,24 @@ class AlertService:
         self._telegram = telegram or TelegramClient()
         self._settings = get_settings()
 
-    def _classify_alert_type(self, match: Match) -> AlertType | None:
+    async def _classify_alert_type(self, match: Match) -> AlertType | None:
         min_conf = self._settings.default_min_match_confidence
         min_profit = Decimal(str(self._settings.default_min_profit_threshold))
+        ws = (
+            await self.session.execute(select(Workspace).where(Workspace.id == match.workspace_id))
+        ).scalar_one_or_none()
+        unpriced_min = effective_unpriced_alert_min(self._settings, ws)
 
         if match.expected_profit is not None:
             if match.match_confidence >= min_conf and match.expected_profit >= min_profit:
                 return AlertType.PROFITABLE_MATCH
         else:
-            if match.match_confidence >= 0.85:
+            if match.match_confidence >= unpriced_min:
                 return AlertType.UNPRICED_MATCH
         return None
 
     async def maybe_create_for_match(self, match: Match) -> Alert | None:
-        alert_type = self._classify_alert_type(match)
+        alert_type = await self._classify_alert_type(match)
         if alert_type is None:
             return None
 
@@ -58,7 +63,20 @@ class AlertService:
             )
         ).scalar_one()
 
-        summary = format_match_summary(match, offer, request)
+        headline = format_match_summary(match, offer, request)
+
+        sell_rm = await self.session.get(RawMessage, offer.raw_message_id)
+        buy_rm = await self.session.get(RawMessage, request.raw_message_id)
+        seller_message_text = (sell_rm.text_body or "").strip() if sell_rm else None
+        buyer_message_text = (buy_rm.text_body or "").strip() if buy_rm else None
+        if not seller_message_text:
+            seller_message_text = None
+        if not buyer_message_text:
+            buyer_message_text = None
+
+        telegram_text = append_original_messages_to_summary(
+            headline, seller_message_text, buyer_message_text
+        )
 
         alert = Alert(
             workspace_id=match.workspace_id,
@@ -66,7 +84,9 @@ class AlertService:
             alert_type=alert_type,
             channel=AlertChannel.DASHBOARD,
             payload_json={
-                "summary": summary,
+                "summary": headline,
+                "seller_message_text": seller_message_text,
+                "buyer_message_text": buyer_message_text,
                 "match_id": str(match.id),
                 "match_type": match.match_type.value,
                 "match_confidence": float(match.match_confidence),
@@ -85,9 +105,8 @@ class AlertService:
         if self._telegram.enabled and self._settings.telegram_default_chat_id:
             sent = await self._telegram.send_message(
                 chat_id=self._settings.telegram_default_chat_id,
-                text=summary,
+                text=telegram_text,
                 reply_markup=build_match_inline_keyboard(str(match.id)),
-                parse_mode=None,
             )
             if sent:
                 alert.channel = AlertChannel.TELEGRAM

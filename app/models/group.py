@@ -31,6 +31,7 @@ class Group(UUIDPKMixin, TimestampMixin, Base):
         index=True,
     )
     external_group_id: Mapped[str] = mapped_column(String(255), nullable=False)
+    invite_code: Mapped[str | None] = mapped_column(String(255), nullable=True)
     group_name: Mapped[str] = mapped_column(String(255), nullable=False)
     group_type: Mapped[GroupType] = mapped_column(
         String(32), nullable=False, default=GroupType.UNKNOWN

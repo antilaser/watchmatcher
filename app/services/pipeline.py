@@ -10,6 +10,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.alerts.service import AlertService
+from app.core.config import get_settings
 from app.core.enums import (
     BuyRequestStatus,
     MessageClassification,
@@ -17,13 +18,29 @@ from app.core.enums import (
     SellOfferStatus,
 )
 from app.core.logging import get_logger
+from app.ingestion.media_redis import pop_pending_image
 from app.matching.service import MatchingService
-from app.models import BuyRequest, ParsedMessage, RawMessage, SellOffer
+from app.models import BuyRequest, Group, ParsedMessage, RawMessage, SellOffer
 from app.normalization.service import NormalizationService
 from app.parsing.service import ParsingService
+from app.parsing.vision_extract import extract_watch_text_from_image
 from app.schemas.parsing import ExtractedWatchTrade, ParseResult
 
 log = get_logger(__name__)
+
+
+def _parse_has_image(raw: RawMessage) -> bool:
+    """True when listing should use image/caption sell heuristics (incl. image sent as WhatsApp document)."""
+    if raw.message_type in ("image", "video"):
+        return True
+    meta = raw.metadata_json or {}
+    if meta.get("image_sent_as_document"):
+        return True
+    if raw.message_type == "document":
+        mime = meta.get("document_mimetype") or meta.get("image_mime_type")
+        if isinstance(mime, str) and mime.lower().startswith("image/"):
+            return True
+    return False
 
 
 class PipelineService:
@@ -52,9 +69,58 @@ class PipelineService:
         if raw.processing_status == ProcessingStatus.COMPLETED:
             return
 
+        grp = (
+            await self.session.execute(select(Group).where(Group.id == raw.group_id))
+        ).scalar_one_or_none()
+        if grp is not None and not grp.is_active:
+            meta = dict(raw.metadata_json or {})
+            meta["skipped_reason"] = "inactive_group"
+            raw.metadata_json = meta
+            raw.processing_status = ProcessingStatus.COMPLETED
+            await self.session.flush()
+            log.info(
+                "pipeline_skipped_inactive_group",
+                raw_message_id=str(raw.id),
+                group_id=str(raw.group_id),
+            )
+            return
+
         raw.processing_status = ProcessingStatus.PROCESSING
         try:
-            parse_result = await self.parsing.parse(raw.text_body)
+            settings = get_settings()
+            caption_only = (raw.text_body or "").strip()
+            text_for_parse = caption_only
+            popped = await pop_pending_image(raw.id)
+            if popped:
+                img_bytes, mime = popped
+                if len(img_bytes) > settings.vision_max_image_bytes:
+                    log.warning("vision_image_too_large", bytes=len(img_bytes))
+                elif settings.vision_enabled and settings.openai_api_key:
+                    try:
+                        vision_snippet = await extract_watch_text_from_image(
+                            img_bytes, mime, caption=text_for_parse
+                        )
+                        if vision_snippet.strip():
+                            glue = "\n" if text_for_parse else ""
+                            text_for_parse = (
+                                f"{text_for_parse}{glue}{vision_snippet.strip()}"
+                            ).strip()
+                            meta = dict(raw.metadata_json or {})
+                            meta["vision_snippet"] = vision_snippet[:2000]
+                            raw.metadata_json = meta
+                    except Exception as e:
+                        log.warning("vision_extract_failed", error=str(e))
+                elif not settings.openai_api_key:
+                    log.info("vision_skipped_no_openai_key_after_image_ingest")
+
+            has_img = _parse_has_image(raw)
+            cls_text = caption_only if (has_img and caption_only) else None
+            parse_result = await self.parsing.parse(
+                text_for_parse,
+                has_image=has_img,
+                classification_text=cls_text,
+                caption_for_reference=caption_only if caption_only else None,
+            )
             parsed = await self._persist_parsed(raw, parse_result)
 
             if parse_result.classification.classification == MessageClassification.OTHER:
@@ -128,6 +194,7 @@ class PipelineService:
             brand_raw=extracted.brand,
             family_raw=extracted.model_family,
             reference_raw=extracted.reference,
+            manufacture_year=extracted.year,
             condition_raw=extracted.condition,
             set_completeness_raw=("full_set" if extracted.full_set else None),
             asking_price=Decimal(str(extracted.price)) if extracted.price else None,

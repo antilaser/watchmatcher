@@ -7,9 +7,13 @@ import re
 PRICE_REGEX = re.compile(
     r"""
     (?P<sym>[€$£¥₣])?\s*
-    (?P<num>\d{1,3}(?:[.,\s]\d{3})+|\d{2,6}(?:[.,]\d{1,2})?)
+    (?P<num>
+        \d{1,3}(?:[.,\s]\d{3})+
+      | \d{1,3}[.,]\d{1,2}
+      | \d{2,6}(?:[.,]\d{1,2})?
+    )
     \s*
-    (?P<suf>k|K|тыс|т\.р\.|т\.\sр\.)?
+    (?P<suf>k|K|m|M|тыс|т\.р\.|т\.\sр\.)?
     \s*
     (?P<cur>EUR|USD|GBP|CHF|AED|JPY|RUB|euro|euros|eur|usd|gbp|chf|aed|jpy|rub|евро|долл|руб|€|\$|£|¥)?
     """,
@@ -21,4 +25,5 @@ REFERENCE_REGEX = re.compile(
     re.IGNORECASE,
 )
 
-YEAR_REGEX = re.compile(r"\b(19[89]\d|20[0-3]\d)\b")
+# Standalone 4-digit calendar years (not a substring of longer model numbers).
+YEAR_REGEX = re.compile(r"(?<![0-9])(19\d{2}|20\d{2})(?![0-9])")

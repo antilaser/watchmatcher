@@ -28,11 +28,11 @@ Schema keys (all optional except `classification`):
 - classification (string, required)
 - brand (string|null) — canonical brand name e.g. "Rolex"
 - model_family (string|null) — e.g. "Submariner Date"
-- reference (string|null) — e.g. "126610LV"
+- reference (string|null) — model / factory reference e.g. "126610LV", "5711/1A-010" (not a calendar year)
 - nickname (string|null) — e.g. "Starbucks"
 - condition (string|null) — one of: new, mint, excellent, good, worn
 - full_set (boolean|null)
-- year (integer|null)
+- year (integer|null) — manufacturing or warranty-card year (19xx–20xx, or year from DD.MM.YYYY on papers). Never use a plain 4-digit year as `reference`.
 - price (number|null)
 - currency (string|null)
 - negotiable (boolean|null)

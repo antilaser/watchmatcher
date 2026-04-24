@@ -1,0 +1,465 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>watchmatch — alerts</title>
+  <style>
+    :root {
+      --bg: #0f1419;
+      --card: #1a2332;
+      --text: #e7ecf3;
+      --muted: #8b9cb3;
+      --accent: #3d8bfd;
+      --danger: #e35d6a;
+      --ok: #3ecf8e;
+      --border: #2a3548;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      line-height: 1.45;
+      min-height: 100vh;
+    }
+    header {
+      padding: 1.25rem 1.5rem;
+      border-bottom: 1px solid var(--border);
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      gap: 1rem;
+      justify-content: space-between;
+    }
+    h1 { font-size: 1.25rem; font-weight: 600; margin: 0; }
+    .note {
+      font-size: 0.85rem;
+      color: var(--muted);
+      max-width: 42rem;
+    }
+    main { padding: 1rem 1.5rem 2rem; }
+    .toolbar { display: flex; gap: 0.5rem; flex-wrap: wrap; margin-bottom: 1rem; }
+    button, .btn {
+      background: var(--card);
+      color: var(--text);
+      border: 1px solid var(--border);
+      padding: 0.45rem 0.85rem;
+      border-radius: 6px;
+      cursor: pointer;
+      font-size: 0.875rem;
+    }
+    button:hover, .btn:hover { border-color: var(--accent); }
+    button.primary { background: var(--accent); border-color: var(--accent); color: #fff; }
+    button.danger { border-color: var(--danger); color: var(--danger); }
+    button:disabled { opacity: 0.5; cursor: not-allowed; }
+    .alert-list { display: flex; flex-direction: column; gap: 0.75rem; }
+    article {
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 1rem 1.1rem;
+    }
+    .meta { font-size: 0.8rem; color: var(--muted); margin-bottom: 0.5rem; }
+    pre.summary {
+      margin: 0.5rem 0 0.75rem;
+      white-space: pre-wrap;
+      word-break: break-word;
+      font-size: 0.9rem;
+    }
+    .links { display: flex; flex-wrap: wrap; gap: 0.5rem; margin-top: 0.5rem; }
+    .links a {
+      color: var(--accent);
+      text-decoration: none;
+      font-size: 0.85rem;
+      border: 1px solid var(--border);
+      padding: 0.35rem 0.65rem;
+      border-radius: 6px;
+    }
+    .links a:hover { border-color: var(--accent); }
+    .actions { display: flex; flex-wrap: wrap; gap: 0.4rem; margin-top: 0.75rem; }
+    .status { font-size: 0.75rem; text-transform: uppercase; letter-spacing: 0.04em; }
+    .status.SENT { color: var(--ok); }
+    .status.PENDING { color: #f0c14b; }
+    .status.ACKNOWLEDGED { color: var(--muted); }
+    .status.FAILED { color: var(--danger); }
+    #msg { margin-top: 1rem; font-size: 0.9rem; }
+    #msg.error { color: var(--danger); }
+    #msg.ok { color: var(--ok); }
+  </style>
+</head>
+<body>
+  <header>
+    <div>
+      <nav style="display:flex;gap:0.5rem;margin-bottom:0.5rem;flex-wrap:wrap;">
+        <a href="/dashboard" class="btn" style="text-decoration:none;display:inline-block;">Alerts</a>
+        <a href="/listings" class="btn" style="text-decoration:none;display:inline-block;">Sell listings</a>
+      </nav>
+      <h1>watchmatch — alerts</h1>
+      <p class="note">
+        Match alerts: profit above the threshold, or no price but enough confidence
+        (including same-reference matches). Label pairs correct / incorrect to filter the list.
+        Below: feedback stats and automatic threshold calibration for the workspace.
+      </p>
+    </div>
+    <button type="button" class="primary" id="btn-refresh">Refresh</button>
+  </header>
+  <main>
+    <div class="toolbar">
+      <label class="note" style="display:flex;align-items:center;gap:0.35rem;">
+        Status
+        <select id="filter-status" style="background:var(--card);color:var(--text);border:1px solid var(--border);border-radius:6px;padding:0.35rem;">
+          <option value="">All</option>
+          <option value="PENDING">PENDING</option>
+          <option value="SENT">SENT</option>
+          <option value="ACKNOWLEDGED">ACKNOWLEDGED</option>
+          <option value="FAILED">FAILED</option>
+        </select>
+      </label>
+      <label class="note" style="display:flex;align-items:center;gap:0.35rem;">
+        <input type="checkbox" id="hide-bad" />
+        Hide pairs marked incorrect
+      </label>
+    </div>
+    <section
+      style="margin-bottom:1rem;padding:1rem;border:1px solid var(--border);border-radius:10px;background:var(--card);"
+      aria-labelledby="cal-heading"
+    >
+      <h2 id="cal-heading" style="font-size:1rem;margin:0 0 0.5rem;">Calibration from labels (30 days)</h2>
+      <p class="note" style="margin:0 0 0.75rem;">
+        Computes GOOD/BAD on matches and suggests thresholds for unpriced alerts and exact-reference floor.
+        Apply saves them to workspace settings (override <code>.env</code>).
+      </p>
+      <div style="display:flex;gap:0.5rem;flex-wrap:wrap;align-items:center;margin-bottom:0.5rem;">
+        <label class="note" style="display:flex;align-items:center;gap:0.35rem;">
+          Only match listings newer than (days), by WhatsApp message time
+          <input type="number" id="match-max-age-days" min="1" max="365" value="7" style="width:4.5rem;background:var(--card);color:var(--text);border:1px solid var(--border);border-radius:6px;padding:0.35rem;" />
+        </label>
+        <button type="button" id="btn-match-age-save">Save horizon</button>
+      </div>
+      <div style="display:flex;gap:0.5rem;flex-wrap:wrap;margin-bottom:0.5rem;">
+        <button type="button" id="btn-cal-stats">Load stats</button>
+        <button type="button" id="btn-cal-apply">Apply suggestion</button>
+        <button type="button" id="btn-cal-reset">Reset to global defaults</button>
+      </div>
+      <pre id="cal-pre" class="note" style="max-height:18rem;overflow:auto;margin:0;white-space:pre-wrap;font-size:0.8rem;"></pre>
+    </section>
+    <section
+      style="margin-bottom:1rem;padding:1rem;border:1px solid var(--border);border-radius:10px;background:var(--card);"
+      aria-labelledby="groups-heading"
+    >
+      <h2 id="groups-heading" style="font-size:1rem;margin:0 0 0.5rem;">Groups</h2>
+      <p class="note" style="margin:0 0 0.75rem;">
+        Uncheck <strong>Process</strong> — new messages from that group are not stored and no matches are built
+        (already queued messages are marked completed without parsing).
+        On Baileys you can also limit chats with <code>WA_GROUP_IDS</code> in <code>.env</code>.
+        <strong>Note:</strong> only groups that have had at least one accepted message reach the API appear here.
+        If you only post in a chat yourself (e.g. a test group), Baileys does <em>not</em> forward those by default: set <code>WA_FORWARD_OWN=true</code> in the ingest container <code>.env</code>.
+        If <code>WA_GROUP_IDS</code> is set, it must list the JIDs of <em>all</em> groups you want; others are dropped on the phone.
+      </p>
+      <button type="button" id="btn-groups">Refresh group list</button>
+      <div id="groups-list" class="note" style="margin-top:0.75rem;"></div>
+    </section>
+    <div id="msg" role="status"></div>
+    <div class="alert-list" id="list"></div>
+  </main>
+  <script>
+    const API = "/api/v1";
+
+    function setMsg(text, cls) {
+      const el = document.getElementById("msg");
+      el.textContent = text || "";
+      el.className = cls || "";
+    }
+
+    function waWeb() {
+      return "https://web.whatsapp.com/";
+    }
+
+    function groupLinks(g, label) {
+      if (!g) return "";
+      const parts = [];
+      if (g.invite_url) {
+        parts.push(`<a href="${encodeURI(g.invite_url)}" target="_blank" rel="noopener">${label}: open group (invite)</a>`);
+      }
+      parts.push(`<a href="${waWeb()}" target="_blank" rel="noopener">${label}: WhatsApp Web</a>`);
+      parts.push(`<span class="note" style="display:inline-block;margin-left:0.25rem;">${label}: ${escapeHtml(g.group_name)}</span>`);
+      return `<div class="links">${parts.join("")}</div>`;
+    }
+
+    function escapeHtml(s) {
+      return String(s)
+        .replace(/&/g, "&amp;")
+        .replace(/</g, "&lt;")
+        .replace(/>/g, "&gt;")
+        .replace(/"/g, "&quot;");
+    }
+
+    function renderItem(a) {
+      const summary = (a.payload_json && a.payload_json.summary) ? a.payload_json.summary : JSON.stringify(a.payload_json, null, 2);
+      const sg = groupLinks(a.sell_group, "Seller (group)");
+      const bg = groupLinks(a.buy_group, "Buyer (group)");
+      const mid = a.match_id || "";
+      const fb = a.match_human_feedback ? ` · label: <strong>${escapeHtml(a.match_human_feedback)}</strong>` : "";
+      const fbBtns = mid ? `
+            <button type="button" data-act="fb-good" data-mid="${mid}">Pair correct</button>
+            <button type="button" data-act="fb-bad" data-mid="${mid}">Pair incorrect</button>` : "";
+      return `
+        <article data-id="${a.id}">
+          <div class="meta">
+            <span class="status ${a.status}">${a.status}</span>
+            · ${a.alert_type} · ${a.channel}
+            · ${new Date(a.created_at).toLocaleString()}${fb}
+          </div>
+          <pre class="summary">${escapeHtml(summary)}</pre>
+          ${sg}
+          ${bg}
+          <div class="actions">
+            ${fbBtns}
+            <button type="button" data-act="ack">Acknowledge</button>
+            <button type="button" data-act="snooze">Snooze 1h</button>
+            <button type="button" class="danger" data-act="del">Delete</button>
+          </div>
+        </article>`;
+    }
+
+    async function load() {
+      setMsg("Loading…", "");
+      const st = document.getElementById("filter-status").value;
+      const hideBad = document.getElementById("hide-bad").checked;
+      let q = "?limit=100";
+      if (st) q += "&status=" + encodeURIComponent(st);
+      if (hideBad) q += "&hide_human_bad=true";
+      let res;
+      try {
+        res = await fetch(API + "/alerts" + q, { credentials: "same-origin" });
+      } catch (e) {
+        setMsg("Network: " + e, "error");
+        return;
+      }
+      if (!res.ok) {
+        setMsg("API error " + res.status + " " + (await res.text()).slice(0, 200), "error");
+        return;
+      }
+      const data = await res.json();
+      const list = document.getElementById("list");
+      list.innerHTML = (data.items && data.items.length)
+        ? data.items.map(renderItem).join("")
+        : "<p class=\"note\">No alerts yet. Matches appear after messages are processed and pass profit / confidence thresholds.</p>";
+      setMsg("Total: " + (data.total ?? 0), "ok");
+
+      list.querySelectorAll("article").forEach((art) => {
+        art.querySelectorAll("button[data-act]").forEach((btn) => {
+          btn.addEventListener("click", () => onAction(art.dataset.id, btn.dataset.act, btn));
+        });
+      });
+    }
+
+    async function submitMatchFeedback(matchId, verdict) {
+      const r = await fetch(API + "/matches/" + matchId + "/feedback", {
+        method: "POST",
+        credentials: "same-origin",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ verdict }),
+      });
+      if (!r.ok) throw new Error(await r.text());
+    }
+
+    async function onAction(id, act, btn) {
+      btn.disabled = true;
+      try {
+        if (act === "fb-good" || act === "fb-bad") {
+          const mid = btn.getAttribute("data-mid");
+          if (!mid) return;
+          await submitMatchFeedback(mid, act === "fb-good" ? "GOOD" : "BAD");
+          await load();
+          return;
+        }
+        if (act === "ack") {
+          const r = await fetch(API + "/alerts/" + id + "/acknowledge", { method: "POST", credentials: "same-origin" });
+          if (!r.ok) throw new Error(await r.text());
+        } else if (act === "snooze") {
+          const r = await fetch(API + "/alerts/" + id + "/snooze", {
+            method: "POST",
+            credentials: "same-origin",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ minutes: 60 }),
+          });
+          if (!r.ok) throw new Error(await r.text());
+        } else if (act === "del") {
+          if (!confirm("Delete this alert permanently?")) { btn.disabled = false; return; }
+          const r = await fetch(API + "/alerts/" + id, { method: "DELETE", credentials: "same-origin" });
+          if (!r.ok && r.status !== 204) throw new Error(await r.text());
+        }
+        await load();
+      } catch (e) {
+        setMsg(String(e), "error");
+      } finally {
+        btn.disabled = false;
+      }
+    }
+
+    document.getElementById("btn-refresh").addEventListener("click", load);
+    document.getElementById("filter-status").addEventListener("change", load);
+    document.getElementById("hide-bad").addEventListener("change", load);
+
+    async function loadCalStats() {
+      const pre = document.getElementById("cal-pre");
+      pre.textContent = "Loading…";
+      try {
+        const r = await fetch(API + "/workspace/match-feedback-stats?since_days=30", {
+          credentials: "same-origin",
+        });
+        if (!r.ok) throw new Error(await r.text());
+        const d = await r.json();
+        pre.textContent = JSON.stringify(d, null, 2);
+        const cur = (d.current_calibration && d.current_calibration.match_candidate_max_age_days) ?? 7;
+        document.getElementById("match-max-age-days").value = String(cur);
+        setMsg("Calibration stats updated.", "ok");
+      } catch (e) {
+        pre.textContent = "";
+        setMsg(String(e), "error");
+      }
+    }
+
+    async function applyCalSuggestion() {
+      if (!confirm("Apply suggested thresholds to the workspace?")) return;
+      try {
+        const r = await fetch(API + "/workspace/match-calibration", {
+          method: "POST",
+          credentials: "same-origin",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ use_suggestion: true, since_days: 30 }),
+        });
+        if (!r.ok) throw new Error(await r.text());
+        const d = await r.json();
+        setMsg("Calibration applied: " + JSON.stringify(d.match_calibration), "ok");
+        await loadCalStats();
+        await load();
+      } catch (e) {
+        setMsg(String(e), "error");
+      }
+    }
+
+    async function resetCal() {
+      if (!confirm("Reset workspace thresholds to values from .env?")) return;
+      try {
+        const r = await fetch(API + "/workspace/match-calibration", {
+          method: "POST",
+          credentials: "same-origin",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ reset_to_defaults: true }),
+        });
+        if (!r.ok) throw new Error(await r.text());
+        setMsg("Calibration reset.", "ok");
+        document.getElementById("cal-pre").textContent = "";
+        await load();
+      } catch (e) {
+        setMsg(String(e), "error");
+      }
+    }
+
+    async function saveMatchMaxAge() {
+      const raw = document.getElementById("match-max-age-days").value;
+      const n = parseInt(raw, 10);
+      if (Number.isNaN(n) || n < 1 || n > 365) {
+        setMsg("Enter a number of days between 1 and 365.", "error");
+        return;
+      }
+      try {
+        let r = await fetch(API + "/workspace/match-candidate-max-age", {
+          method: "POST",
+          credentials: "same-origin",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ days: n }),
+        });
+        if (r.status === 404 || r.status === 405) {
+          r = await fetch(API + "/workspace/match-candidate-max-age", {
+            method: "PATCH",
+            credentials: "same-origin",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ days: n }),
+          });
+        }
+        if (r.status === 404 || r.status === 405) {
+          r = await fetch(API + "/workspace/match-calibration", {
+            method: "POST",
+            credentials: "same-origin",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ days: n }),
+          });
+        }
+        if (!r.ok) throw new Error(await r.text());
+        setMsg("Match horizon saved: " + n + " days.", "ok");
+        await loadCalStats();
+      } catch (e) {
+        setMsg(String(e), "error");
+      }
+    }
+
+    document.getElementById("btn-match-age-save").addEventListener("click", saveMatchMaxAge);
+    document.getElementById("btn-cal-stats").addEventListener("click", loadCalStats);
+    document.getElementById("btn-cal-apply").addEventListener("click", applyCalSuggestion);
+    document.getElementById("btn-cal-reset").addEventListener("click", resetCal);
+
+    async function loadGroups() {
+      const box = document.getElementById("groups-list");
+      box.textContent = "Loading…";
+      try {
+        const r = await fetch(API + "/groups", { credentials: "same-origin" });
+        if (!r.ok) throw new Error(await r.text());
+        const data = await r.json();
+        if (!data.length) {
+          box.innerHTML = "<p class=\"note\" style=\"margin:0\">No groups yet — they appear here after the first WhatsApp messages reach the API.</p>";
+          return;
+        }
+        box.innerHTML = data
+          .map((g) => {
+            const jid =
+              g.external_group_id.length > 40
+                ? escapeHtml(g.external_group_id.slice(0, 36)) + "…"
+                : escapeHtml(g.external_group_id);
+            return `
+        <article class="group-row" style="margin-top:0.5rem;padding:0.75rem;border:1px solid var(--border);border-radius:8px;">
+          <label style="display:flex;align-items:flex-start;gap:0.5rem;cursor:pointer;">
+            <input type="checkbox" data-gid="${g.id}" ${g.is_active ? "checked" : ""} />
+            <span><strong>${escapeHtml(g.group_name)}</strong><br /><span class="note">${jid}</span></span>
+          </label>
+        </article>`;
+          })
+          .join("");
+        box.querySelectorAll("input[type=checkbox][data-gid]").forEach((cb) => {
+          cb.addEventListener("change", async () => {
+            const gid = cb.getAttribute("data-gid");
+            const want = cb.checked;
+            cb.disabled = true;
+            try {
+              const pr = await fetch(API + "/groups/" + gid, {
+                method: "PATCH",
+                credentials: "same-origin",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ is_active: want }),
+              });
+              if (!pr.ok) throw new Error(await pr.text());
+              setMsg(want ? "Group is processing again." : "Group disabled: new messages are not accepted.", "ok");
+            } catch (e) {
+              cb.checked = !want;
+              setMsg(String(e), "error");
+            } finally {
+              cb.disabled = false;
+            }
+          });
+        });
+      } catch (e) {
+        box.textContent = "";
+        setMsg(String(e), "error");
+      }
+    }
+
+    document.getElementById("btn-groups").addEventListener("click", loadGroups);
+
+    load();
+  </script>
+</body>
+</html>

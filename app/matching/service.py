@@ -2,23 +2,46 @@
 
 from __future__ import annotations
 
+from datetime import datetime, timedelta, timezone
 from decimal import Decimal
+from uuid import UUID
 
+import httpx
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import get_settings
 from app.core.enums import MatchStatus, MatchType
 from app.core.logging import get_logger
+from app.matching.calibration import (
+    effective_exact_reference_floor,
+    effective_match_candidate_max_age_days,
+)
 from app.matching.candidate_search import (
     find_active_sell_offers_for_request,
     find_open_buy_requests_for_offer,
 )
-from app.matching.profit import ProfitInputs, calculate_profit
+from app.matching.profit import ProfitInputs, ProfitResult, calculate_profit
+from app.matching.reporting_fx import build_reporting_amounts_for_profit
 from app.matching.scoring import ScoreInputs, compute_match_score
-from app.models import BuyRequest, Match, SellOffer
+from app.models import BuyRequest, Match, SellOffer, Workspace
 
 log = get_logger(__name__)
+
+_MIN_REF_PREFIX_LEN = 4
+
+
+def _refs_compatible(offer_ref: str | None, request_ref: str | None) -> bool:
+    """True when refs are equal or one is a meaningful prefix of the other (e.g. 126334 vs 126334-0001)."""
+    if not offer_ref or not request_ref:
+        return False
+    o = str(offer_ref).strip().upper()
+    r = str(request_ref).strip().upper()
+    if o == r:
+        return True
+    if len(o) < _MIN_REF_PREFIX_LEN or len(r) < _MIN_REF_PREFIX_LEN:
+        return False
+    return r.startswith(o) or o.startswith(r)
 
 
 def _decide_match_type(offer: SellOffer, request: BuyRequest) -> tuple[MatchType, float, float, float]:
@@ -27,11 +50,7 @@ def _decide_match_type(offer: SellOffer, request: BuyRequest) -> tuple[MatchType
         offer.watch_entity_id is not None
         and offer.watch_entity_id == request.watch_entity_id
     )
-    same_ref = (
-        offer.reference_raw is not None
-        and request.reference_raw is not None
-        and offer.reference_raw.upper() == request.reference_raw.upper()
-    )
+    same_ref = _refs_compatible(offer.reference_raw, request.reference_raw)
     same_brand = (
         offer.brand_raw is not None
         and request.brand_raw is not None
@@ -57,12 +76,29 @@ class MatchingService:
         self.session = session
         self._settings = get_settings()
 
+    async def _counterpart_message_cutoff(self, workspace_id: UUID) -> datetime:
+        ws = (
+            await self.session.execute(select(Workspace).where(Workspace.id == workspace_id))
+        ).scalar_one_or_none()
+        days = effective_match_candidate_max_age_days(self._settings, ws)
+        return datetime.now(timezone.utc) - timedelta(days=days)
+
     async def match_for_new_offer(self, offer: SellOffer) -> list[Match]:
-        candidates = await find_open_buy_requests_for_offer(self.session, offer)
+        cutoff = await self._counterpart_message_cutoff(offer.workspace_id)
+        candidates = await find_open_buy_requests_for_offer(
+            self.session,
+            offer,
+            counterpart_message_not_before=cutoff,
+        )
         return await self._build_matches(offer=offer, requests=candidates)
 
     async def match_for_new_request(self, request: BuyRequest) -> list[Match]:
-        offers = await find_active_sell_offers_for_request(self.session, request)
+        cutoff = await self._counterpart_message_cutoff(request.workspace_id)
+        offers = await find_active_sell_offers_for_request(
+            self.session,
+            request,
+            counterpart_message_not_before=cutoff,
+        )
         return await self._build_matches_for_request(request=request, offers=offers)
 
     async def _build_matches(
@@ -117,19 +153,85 @@ class MatchingService:
                 request_created_at=request.created_at,
             )
         )
+        exact_ref = (
+            offer.reference_raw
+            and request.reference_raw
+            and str(offer.reference_raw).strip().upper() == str(request.reference_raw).strip().upper()
+            and len(str(offer.reference_raw).strip()) >= 4
+        )
+        if exact_ref:
+            ws = (
+                await self.session.execute(
+                    select(Workspace).where(Workspace.id == offer.workspace_id)
+                )
+            ).scalar_one_or_none()
+            floor = effective_exact_reference_floor(self._settings, ws)
+            score = max(score, floor)
 
-        profit = calculate_profit(
-            ProfitInputs(
-                seller_price=offer.asking_price,
-                buyer_price=request.target_price,
-                seller_currency=offer.currency,
-                buyer_currency=request.currency,
-                fx_rate=Decimal("1.0") if offer.currency == request.currency else None,
-                shipping_cost=Decimal(str(self._settings.default_shipping_cost)),
-                fee_percent=Decimal(str(self._settings.default_fee_percent)),
-                fixed_fee=Decimal(str(self._settings.default_fixed_fee)),
-                risk_buffer=Decimal(str(self._settings.default_risk_buffer)),
+        ship = Decimal(str(self._settings.default_shipping_cost))
+        fee_p = Decimal(str(self._settings.default_fee_percent))
+        fee_f = Decimal(str(self._settings.default_fixed_fee))
+        risk = Decimal(str(self._settings.default_risk_buffer))
+
+        if offer.asking_price is not None and request.target_price is not None:
+            async with httpx.AsyncClient(timeout=25.0) as http:
+                rep = await build_reporting_amounts_for_profit(
+                    offer=offer,
+                    request=request,
+                    settings=self._settings,
+                    http=http,
+                )
+            if rep is not None:
+                profit = calculate_profit(
+                    ProfitInputs(
+                        seller_price=rep.seller,
+                        buyer_price=rep.buyer,
+                        seller_currency=rep.profit_currency,
+                        buyer_currency=rep.profit_currency,
+                        fx_rate=None,
+                        shipping_cost=ship,
+                        fee_percent=fee_p,
+                        fixed_fee=fee_f,
+                        risk_buffer=risk,
+                    )
+                )
+                profit_breakdown = {**profit.breakdown, "fx_conversion": rep.fx_meta}
+            else:
+                profit = ProfitResult(
+                    expected_profit=None,
+                    seller_price_base=offer.asking_price,
+                    buyer_price_base=request.target_price,
+                    fx_applied=False,
+                    breakdown={
+                        "reason": "reporting_currency_conversion_unavailable",
+                        "hint": "Configure XE_ACCOUNT_ID and XE_API_KEY (Xe Currency Data API), or set PROFIT_REPORTING_CURRENCY=AUTO when both legs share the same currency.",
+                        "seller_currency": offer.currency,
+                        "buyer_currency": request.currency,
+                    },
+                )
+                profit_breakdown = profit.breakdown
+        else:
+            profit = calculate_profit(
+                ProfitInputs(
+                    seller_price=offer.asking_price,
+                    buyer_price=request.target_price,
+                    seller_currency=offer.currency,
+                    buyer_currency=request.currency,
+                    fx_rate=Decimal("1.0") if offer.currency == request.currency else None,
+                    shipping_cost=ship,
+                    fee_percent=fee_p,
+                    fixed_fee=fee_f,
+                    risk_buffer=risk,
+                )
             )
+            profit_breakdown = profit.breakdown
+
+        match_fx_rate = (
+            Decimal("1.0")
+            if offer.asking_price is not None
+            and request.target_price is not None
+            and (offer.currency or "").strip().upper() == (request.currency or "").strip().upper()
+            else None
         )
 
         m = Match(
@@ -143,10 +245,10 @@ class MatchingService:
             buyer_price=request.target_price,
             seller_currency=offer.currency,
             buyer_currency=request.currency,
-            fx_rate=Decimal("1.0") if offer.currency == request.currency else None,
-            shipping_cost=Decimal(str(self._settings.default_shipping_cost)),
+            fx_rate=match_fx_rate,
+            shipping_cost=ship,
             fee_cost=None,
-            risk_buffer=Decimal(str(self._settings.default_risk_buffer)),
+            risk_buffer=risk,
             expected_profit=profit.expected_profit,
             status=MatchStatus.PENDING_REVIEW,
             reasoning_json={
@@ -155,7 +257,8 @@ class MatchingService:
                 "brand_score": brand_s,
                 "family_score": fam_s,
                 "score": score,
-                "profit_breakdown": profit.breakdown,
+                "exact_reference_string_match": exact_ref,
+                "profit_breakdown": profit_breakdown,
             },
         )
         self.session.add(m)

@@ -6,7 +6,7 @@ from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict
 
-from app.core.enums import MatchStatus, MatchType
+from app.core.enums import HumanMatchFeedback, MatchStatus, MatchType
 
 
 class MatchOut(BaseModel):
@@ -31,3 +31,11 @@ class MatchOut(BaseModel):
     status: MatchStatus
     reasoning_json: dict
     created_at: datetime
+    human_feedback: HumanMatchFeedback | None = None
+    human_feedback_note: str | None = None
+    human_feedback_at: datetime | None = None
+
+
+class MatchHumanFeedbackIn(BaseModel):
+    verdict: HumanMatchFeedback
+    note: str | None = None

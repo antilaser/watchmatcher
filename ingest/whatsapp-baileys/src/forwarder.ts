@@ -8,12 +8,16 @@ export interface IncomingMessage {
   external_message_id: string;
   external_group_id: string;
   group_name?: string | null;
+  group_invite_code?: string;
   sender_name?: string | null;
   sender_external_id?: string | null;
   text_body: string;
   message_type: string;
   original_timestamp: string;
   metadata?: Record<string, unknown>;
+  /** Base64 (standard) JPEG/PNG from WhatsApp image; optional */
+  image_base64?: string;
+  image_mime_type?: string;
 }
 
 interface Batch {

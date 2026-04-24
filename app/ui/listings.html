@@ -1,0 +1,325 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>watchmatch — sell listings</title>
+  <style>
+    :root {
+      --bg: #0f1419;
+      --card: #1a2332;
+      --text: #e7ecf3;
+      --muted: #8b9cb3;
+      --accent: #3d8bfd;
+      --border: #2a3548;
+      --ok: #3ecf8e;
+      --danger: #e35d6a;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      line-height: 1.45;
+      min-height: 100vh;
+    }
+    header {
+      padding: 1.25rem 1.5rem;
+      border-bottom: 1px solid var(--border);
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      gap: 1rem;
+      justify-content: space-between;
+    }
+    h1 { font-size: 1.25rem; font-weight: 600; margin: 0; }
+    .note { font-size: 0.85rem; color: var(--muted); max-width: 48rem; }
+    nav { display: flex; gap: 0.5rem; flex-wrap: wrap; }
+    nav a {
+      color: var(--text);
+      text-decoration: none;
+      border: 1px solid var(--border);
+      padding: 0.45rem 0.85rem;
+      border-radius: 6px;
+      font-size: 0.875rem;
+    }
+    nav a:hover { border-color: var(--accent); color: var(--accent); }
+    main { padding: 1rem 1.5rem 2rem; }
+    .filters {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(11rem, 1fr));
+      gap: 0.75rem 1rem;
+      padding: 1rem;
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      margin-bottom: 1rem;
+    }
+    .filters label { display: flex; flex-direction: column; gap: 0.25rem; font-size: 0.8rem; color: var(--muted); }
+    .filters input, .filters select {
+      background: var(--bg);
+      color: var(--text);
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      padding: 0.4rem 0.5rem;
+      font-size: 0.875rem;
+    }
+    .filters .span2 { grid-column: span 2; }
+    @media (max-width: 520px) {
+      .filters .span2 { grid-column: span 1; }
+    }
+    .toolbar { display: flex; flex-wrap: wrap; gap: 0.5rem; align-items: center; margin-bottom: 0.75rem; }
+    button {
+      background: var(--accent);
+      color: #fff;
+      border: 1px solid var(--accent);
+      padding: 0.45rem 0.9rem;
+      border-radius: 6px;
+      cursor: pointer;
+      font-size: 0.875rem;
+    }
+    button.secondary {
+      background: var(--card);
+      color: var(--text);
+      border-color: var(--border);
+    }
+    button.secondary:hover { border-color: var(--accent); }
+    button:disabled { opacity: 0.5; cursor: not-allowed; }
+    #msg { font-size: 0.9rem; margin-bottom: 0.75rem; }
+    #msg.error { color: var(--danger); }
+    #msg.ok { color: var(--ok); }
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 0.85rem;
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      overflow: hidden;
+    }
+    th, td {
+      text-align: left;
+      padding: 0.55rem 0.65rem;
+      border-bottom: 1px solid var(--border);
+      vertical-align: top;
+    }
+    th { color: var(--muted); font-weight: 500; font-size: 0.78rem; text-transform: uppercase; letter-spacing: 0.03em; }
+    tr:last-child td { border-bottom: none; }
+    tr:hover td { background: rgba(61, 139, 253, 0.06); }
+    .mono { font-family: ui-monospace, monospace; font-size: 0.8rem; }
+    .preview {
+      max-width: 22rem;
+      white-space: pre-wrap;
+      word-break: break-word;
+      color: var(--muted);
+      font-size: 0.8rem;
+    }
+    .pager { display: flex; gap: 0.5rem; align-items: center; margin-top: 1rem; flex-wrap: wrap; }
+  </style>
+</head>
+<body>
+  <header>
+    <div>
+      <h1>watchmatch — sell listings</h1>
+      <p class="note" style="margin:0.35rem 0 0;">
+        Active sell offers from every WhatsApp group in the workspace. Card / caption years (19xx–20xx and DD.MM.YYYY dates) are parsed into <strong>Year</strong>; model references stay in Ref.
+      </p>
+    </div>
+    <nav>
+      <a href="/listings">Listings</a>
+      <a href="/dashboard">Alerts</a>
+    </nav>
+  </header>
+  <main>
+    <form class="filters" id="filters" autocomplete="off">
+      <label>Brand contains
+        <input type="text" id="f-brand" placeholder="e.g. Rolex" maxlength="128" />
+      </label>
+      <label class="span2">Reference / model #
+        <input type="text" id="f-ref" placeholder="e.g. 126710" maxlength="64" />
+      </label>
+      <label>Price min
+        <input type="number" id="f-pmin" min="0" step="any" placeholder="Any" />
+      </label>
+      <label>Price max
+        <input type="number" id="f-pmax" min="0" step="any" placeholder="Any" />
+      </label>
+      <label>Currency
+        <input type="text" id="f-cur" placeholder="GBP" maxlength="8" />
+      </label>
+      <label>Message from (date)
+        <input type="date" id="f-dfrom" />
+      </label>
+      <label>Message to (date)
+        <input type="date" id="f-dto" />
+      </label>
+      <label>Year (card / text)
+        <input type="number" id="f-year" min="1900" max="2099" step="1" placeholder="e.g. 2024" />
+      </label>
+      <label>Status
+        <select id="f-status">
+          <option value="ACTIVE" selected>Active (for sale)</option>
+          <option value="">All statuses</option>
+          <option value="MATCHED">Matched</option>
+          <option value="CLOSED">Closed</option>
+          <option value="ARCHIVED">Archived</option>
+          <option value="EXPIRED">Expired</option>
+        </select>
+      </label>
+      <div class="toolbar span2" style="align-self:end;">
+        <button type="submit" id="btn-search">Search</button>
+        <button type="button" class="secondary" id="btn-reset">Clear filters</button>
+      </div>
+    </form>
+    <div id="msg" role="status"></div>
+    <div style="overflow-x:auto;">
+      <table>
+        <thead>
+          <tr>
+            <th>Message (UTC)</th>
+            <th>Group</th>
+            <th>Brand / family</th>
+            <th>Ref</th>
+            <th>Year</th>
+            <th>Price</th>
+            <th>Seller</th>
+            <th>Preview</th>
+          </tr>
+        </thead>
+        <tbody id="tbody">
+          <tr><td colspan="8" class="note">Use Search to load listings.</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <div class="pager">
+      <button type="button" class="secondary" id="btn-prev" disabled>Previous</button>
+      <button type="button" class="secondary" id="btn-next" disabled>Next</button>
+      <span class="note" id="pager-meta"></span>
+    </div>
+  </main>
+  <script>
+    const API = "/api/v1";
+    const LIMIT = 50;
+    let offset = 0;
+    let lastTotal = 0;
+
+    function setMsg(text, cls) {
+      const el = document.getElementById("msg");
+      el.textContent = text || "";
+      el.className = cls || "";
+    }
+
+    function escapeHtml(s) {
+      return String(s)
+        .replace(/&/g, "&amp;")
+        .replace(/</g, "&lt;")
+        .replace(/>/g, "&gt;")
+        .replace(/"/g, "&quot;");
+    }
+
+    function buildQuery() {
+      const p = new URLSearchParams();
+      p.set("limit", String(LIMIT));
+      p.set("offset", String(offset));
+      const st = document.getElementById("f-status").value;
+      if (st) p.set("status", st);
+      const brand = document.getElementById("f-brand").value.trim();
+      if (brand) p.set("brand", brand);
+      const ref = document.getElementById("f-ref").value.trim();
+      if (ref) p.set("reference", ref);
+      const pmin = document.getElementById("f-pmin").value.trim();
+      if (pmin !== "") p.set("price_min", pmin);
+      const pmax = document.getElementById("f-pmax").value.trim();
+      if (pmax !== "") p.set("price_max", pmax);
+      const cur = document.getElementById("f-cur").value.trim();
+      if (cur) p.set("currency", cur);
+      const df = document.getElementById("f-dfrom").value;
+      if (df) p.set("message_on_or_after", df);
+      const dt = document.getElementById("f-dto").value;
+      if (dt) p.set("message_on_or_before", dt);
+      const year = document.getElementById("f-year").value.trim();
+      if (year !== "") p.set("year", year);
+      return p.toString();
+    }
+
+    function fmtPrice(row) {
+      if (row.asking_price == null) return "—";
+      const cur = row.currency || "";
+      return escapeHtml(String(row.asking_price)) + (cur ? " " + escapeHtml(cur) : "");
+    }
+
+    function renderRow(row) {
+      const when = new Date(row.message_at).toISOString().slice(0, 16).replace("T", " ");
+      const bf = [row.brand_raw, row.family_raw].filter(Boolean).join(" · ") || "—";
+      const yr = row.manufacture_year != null ? String(row.manufacture_year) : "—";
+      return `<tr>
+        <td class="mono">${escapeHtml(when)}</td>
+        <td>${escapeHtml(row.group_name || "")}</td>
+        <td>${escapeHtml(bf)}</td>
+        <td class="mono">${escapeHtml(row.reference_raw || "—")}</td>
+        <td class="mono">${escapeHtml(yr)}</td>
+        <td>${fmtPrice(row)}</td>
+        <td>${escapeHtml(row.seller_name || "—")}</td>
+        <td class="preview">${escapeHtml(row.text_preview || "")}</td>
+      </tr>`;
+    }
+
+    async function load() {
+      setMsg("Loading…", "");
+      const q = buildQuery();
+      let res;
+      try {
+        res = await fetch(API + "/listings/sell-offers?" + q, { credentials: "same-origin" });
+      } catch (e) {
+        setMsg("Network: " + e, "error");
+        return;
+      }
+      if (!res.ok) {
+        setMsg("API " + res.status + " " + (await res.text()).slice(0, 240), "error");
+        return;
+      }
+      const data = await res.json();
+      lastTotal = data.total ?? 0;
+      const tb = document.getElementById("tbody");
+      tb.innerHTML = (data.items && data.items.length)
+        ? data.items.map(renderRow).join("")
+        : "<tr><td colspan=\"8\" class=\"note\">No rows for these filters.</td></tr>";
+      document.getElementById("btn-prev").disabled = offset <= 0;
+      document.getElementById("btn-next").disabled = offset + LIMIT >= lastTotal;
+      document.getElementById("pager-meta").textContent =
+        "Showing " + (data.items ? data.items.length : 0) + " of " + lastTotal + " (offset " + offset + ")";
+      setMsg("OK", "ok");
+    }
+
+    document.getElementById("btn-reset").addEventListener("click", () => {
+      document.getElementById("f-brand").value = "";
+      document.getElementById("f-ref").value = "";
+      document.getElementById("f-pmin").value = "";
+      document.getElementById("f-pmax").value = "";
+      document.getElementById("f-cur").value = "";
+      document.getElementById("f-dfrom").value = "";
+      document.getElementById("f-dto").value = "";
+      document.getElementById("f-year").value = "";
+      document.getElementById("f-status").value = "ACTIVE";
+      offset = 0;
+      load();
+    });
+    document.getElementById("btn-prev").addEventListener("click", () => {
+      offset = Math.max(0, offset - LIMIT);
+      load();
+    });
+    document.getElementById("btn-next").addEventListener("click", () => {
+      offset += LIMIT;
+      load();
+    });
+    document.getElementById("filters").addEventListener("submit", (e) => {
+      e.preventDefault();
+      offset = 0;
+      load();
+    });
+
+    load();
+  </script>
+</body>
+</html>

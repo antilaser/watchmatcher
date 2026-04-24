@@ -4,7 +4,7 @@ import uuid
 from datetime import datetime
 from decimal import Decimal
 
-from sqlalchemy import Boolean, DateTime, ForeignKey, Numeric, String, Text
+from sqlalchemy import Boolean, DateTime, ForeignKey, Integer, Numeric, String, Text
 from app.models._types import GUID, JSONB
 from sqlalchemy.orm import Mapped, mapped_column
 
@@ -44,6 +44,9 @@ class SellOffer(UUIDPKMixin, TimestampMixin, Base):
     brand_raw: Mapped[str | None] = mapped_column(String(128), nullable=True)
     family_raw: Mapped[str | None] = mapped_column(String(255), nullable=True)
     reference_raw: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    manufacture_year: Mapped[int | None] = mapped_column(
+        Integer, nullable=True, index=True, doc="Parsed card / model year (19xx–20xx), not the reference."
+    )
     condition_raw: Mapped[str | None] = mapped_column(String(128), nullable=True)
     set_completeness_raw: Mapped[str | None] = mapped_column(String(128), nullable=True)
 

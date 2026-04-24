@@ -1,9 +1,10 @@
 from __future__ import annotations
 
 import uuid
+from datetime import datetime
 from decimal import Decimal
 
-from sqlalchemy import ForeignKey, Index, Numeric, String, UniqueConstraint
+from sqlalchemy import DateTime, ForeignKey, Index, Numeric, String, Text, UniqueConstraint
 from app.models._types import GUID, JSONB
 from sqlalchemy.orm import Mapped, mapped_column
 
@@ -59,3 +60,7 @@ class Match(UUIDPKMixin, TimestampMixin, Base):
         String(32), nullable=False, default=MatchStatus.PENDING_REVIEW
     )
     reasoning_json: Mapped[dict] = mapped_column(JSONB, nullable=False, default=dict)
+
+    human_feedback: Mapped[str | None] = mapped_column(String(8), nullable=True)
+    human_feedback_note: Mapped[str | None] = mapped_column(Text, nullable=True)
+    human_feedback_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)

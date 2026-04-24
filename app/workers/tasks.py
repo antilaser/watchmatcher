@@ -26,10 +26,12 @@ async def process_raw_message_job(ctx: dict, raw_message_id: str) -> None:
 
 
 async def recompute_open_requests_job(ctx: dict) -> int:
-    """Re-run matching for all OPEN/OPEN_UNPRICED buy requests."""
-    n = 0
+    """Re-run matching for open buy requests and active sell offers (heals near-simultaneous ingest)."""
+    n_buy = 0
+    n_sell = 0
     async with session_scope() as session:
-        rows = (
+        matcher = MatchingService(session)
+        buy_rows = (
             await session.execute(
                 select(BuyRequest).where(
                     BuyRequest.status.in_(
@@ -38,12 +40,19 @@ async def recompute_open_requests_job(ctx: dict) -> int:
                 )
             )
         ).scalars().all()
-        matcher = MatchingService(session)
-        for r in rows:
+        for r in buy_rows:
             await matcher.match_for_new_request(r)
-            n += 1
-    log.info("recompute_open_requests_done", count=n)
-    return n
+            n_buy += 1
+        sell_rows = (
+            await session.execute(
+                select(SellOffer).where(SellOffer.status == SellOfferStatus.ACTIVE)
+            )
+        ).scalars().all()
+        for o in sell_rows:
+            await matcher.match_for_new_offer(o)
+            n_sell += 1
+    log.info("recompute_open_trades_done", buy_requests=n_buy, sell_offers=n_sell)
+    return n_buy + n_sell
 
 
 async def cleanup_expired_entities_job(ctx: dict) -> dict:

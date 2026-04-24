@@ -2,6 +2,7 @@ import {
   default as makeWASocket,
   Browsers,
   DisconnectReason,
+  downloadMediaMessage,
   useMultiFileAuthState,
   fetchLatestBaileysVersion,
   type WASocket,
@@ -15,6 +16,8 @@ import { config } from "./config.js";
 import { enqueue, flush } from "./forwarder.js";
 
 const log = pino({ level: config.logLevel, name: "wa-ingest" });
+const waLogger = pino({ level: "silent" });
+const MAX_IMAGE_BYTES = 5 * 1024 * 1024;
 
 /** 408 is both `connectionLost` and `timedOut` in Baileys enum */
 function disconnectLabel(code: number | undefined): string {
@@ -44,8 +47,22 @@ function extractText(msg: WAMessage): string | null {
     m.extendedTextMessage?.text ??
     m.imageMessage?.caption ??
     m.videoMessage?.caption ??
+    m.documentMessage?.caption ??
     null
   );
+}
+
+function inferMessageType(msg: WAMessage): string {
+  const m = msg.message;
+  if (!m) return "text";
+  if (m.imageMessage) return "image";
+  if (m.videoMessage) return "video";
+  if (m.documentMessage) {
+    const mime = m.documentMessage.mimetype || "";
+    if (mime.startsWith("image/")) return "image";
+    return "document";
+  }
+  return "text";
 }
 
 async function start(): Promise<void> {
@@ -63,6 +80,7 @@ async function start(): Promise<void> {
   log.info({ version, isLatest }, "baileys_starting");
 
   const groupNameCache = new Map<string, string>();
+  const groupInviteCache = new Map<string, string | undefined>();
 
   const sock = makeWASocket({
     version,
@@ -110,16 +128,44 @@ async function start(): Promise<void> {
     if (type !== "notify") return;
     for (const m of messages) {
       if (!shouldForward(m)) continue;
-      const text = extractText(m);
-      if (!text) continue;
+      const caption = extractText(m)?.trim() ?? "";
+      const doc = m.message?.documentMessage;
+      const isImageDocument = Boolean(doc?.mimetype?.startsWith("image/"));
+      const hasImage = Boolean(m.message?.imageMessage) || isImageDocument;
+      let imageBase64: string | undefined;
+      let imageMimeType: string | undefined;
+      if (hasImage) {
+        try {
+          const buf = await downloadMediaMessage(m, "buffer", {}, {
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+            logger: waLogger as any,
+            reuploadRequest: sock.updateMediaMessage,
+          });
+          if (buf.length > MAX_IMAGE_BYTES) {
+            log.warn({ bytes: buf.length }, "image_too_large_skipped");
+          } else {
+            imageBase64 = Buffer.from(buf).toString("base64");
+            imageMimeType =
+              m.message?.imageMessage?.mimetype ??
+              doc?.mimetype ??
+              "image/jpeg";
+          }
+        } catch (err) {
+          log.warn({ err }, "image_download_failed");
+        }
+      }
+      if (!caption && !imageBase64) continue;
       const remoteJid = m.key.remoteJid!;
 
       let groupName = groupNameCache.get(remoteJid) ?? null;
-      if (!groupName) {
+      let inviteCode = groupInviteCache.get(remoteJid);
+      if (groupName === null || inviteCode === undefined) {
         try {
           const meta = await sock.groupMetadata(remoteJid);
           groupName = meta.subject;
           groupNameCache.set(remoteJid, groupName);
+          inviteCode = meta.inviteCode;
+          groupInviteCache.set(remoteJid, inviteCode);
         } catch {
           // metadata fetch can rate-limit; ignore and forward without name
         }
@@ -130,12 +176,19 @@ async function start(): Promise<void> {
         external_message_id: m.key.id ?? `${remoteJid}:${tsSec}`,
         external_group_id: remoteJid,
         group_name: groupName,
+        group_invite_code: inviteCode ?? undefined,
         sender_name: m.pushName ?? null,
         sender_external_id: m.key.participant ?? remoteJid,
-        text_body: text,
-        message_type: "text",
+        text_body: caption,
+        message_type: inferMessageType(m),
         original_timestamp: new Date(tsSec * 1000).toISOString(),
-        metadata: { fromMe: m.key.fromMe ?? false },
+        metadata: {
+          fromMe: m.key.fromMe ?? false,
+          ...(doc?.mimetype ? { document_mimetype: doc.mimetype } : {}),
+          ...(isImageDocument ? { image_sent_as_document: true } : {}),
+        },
+        image_base64: imageBase64,
+        image_mime_type: imageMimeType,
       });
     }
   });

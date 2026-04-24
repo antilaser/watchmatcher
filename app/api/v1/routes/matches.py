@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from datetime import datetime, timezone
 from uuid import UUID
 
 from fastapi import APIRouter, HTTPException, Query, status
@@ -10,7 +11,7 @@ from app.core.enums import MatchStatus, ReviewActionType, ReviewTargetType
 from app.models import Match
 from app.review.service import ReviewError, ReviewService
 from app.schemas.common import Page
-from app.schemas.match import MatchOut
+from app.schemas.match import MatchHumanFeedbackIn, MatchOut
 
 router = APIRouter(prefix="/matches", tags=["matches"])
 
@@ -69,6 +70,29 @@ async def approve_match(match_id: UUID, workspace: WorkspaceDep, session: Sessio
         )
     except ReviewError as e:
         raise HTTPException(status.HTTP_400_BAD_REQUEST, str(e)) from e
+    await session.commit()
+    return {"ok": True}
+
+
+@router.post("/{match_id}/feedback")
+async def submit_match_human_feedback(
+    match_id: UUID,
+    body: MatchHumanFeedbackIn,
+    workspace: WorkspaceDep,
+    session: SessionDep,
+):
+    """Operator label for suggested pair (dashboard training; filter with hide_human_bad on /alerts)."""
+    m = (
+        await session.execute(
+            select(Match).where(Match.id == match_id, Match.workspace_id == workspace.id)
+        )
+    ).scalar_one_or_none()
+    if m is None:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "match not found")
+    m.human_feedback = body.verdict.value
+    note = (body.note or "").strip()
+    m.human_feedback_note = note or None
+    m.human_feedback_at = datetime.now(timezone.utc)
     await session.commit()
     return {"ok": True}
 

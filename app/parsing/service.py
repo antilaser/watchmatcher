@@ -11,7 +11,7 @@ from app.parsing.rules import (
     extract_brand,
     extract_condition,
     extract_price_and_currency,
-    extract_reference,
+    extract_reference_prefer_caption,
     extract_set_completeness,
     extract_year,
     is_negotiable,
@@ -28,9 +28,11 @@ log = get_logger(__name__)
 def _rule_extract(
     text: str,
     classification: MessageClassification,
+    *,
+    caption_for_reference: str | None = None,
 ) -> tuple[ExtractedWatchTrade, float]:
     brand = extract_brand(text)
-    reference = extract_reference(text)
+    reference = extract_reference_prefer_caption(caption_for_reference, text)
     price, currency = extract_price_and_currency(text)
     condition = extract_condition(text)
     full_set_str = extract_set_completeness(text)
@@ -72,8 +74,20 @@ class ParsingService:
         self._llm_enabled = settings.llm_enabled and settings.llm_fallback_enabled
         self._threshold = settings.rule_parse_confidence_threshold
 
-    async def parse(self, text: str) -> ParseResult:
-        cls: ClassificationResult = classify(text)
+    async def parse(
+        self,
+        text: str,
+        *,
+        has_image: bool = False,
+        classification_text: str | None = None,
+        caption_for_reference: str | None = None,
+    ) -> ParseResult:
+        cls_src = (
+            classification_text.strip()
+            if classification_text and classification_text.strip()
+            else text
+        )
+        cls: ClassificationResult = classify(cls_src, has_image=has_image)
 
         if cls.classification == MessageClassification.OTHER:
             return ParseResult(
@@ -85,7 +99,11 @@ class ParsingService:
                 notes=["classified_as_other"],
             )
 
-        rule_extracted, rule_conf = _rule_extract(text, cls.classification)
+        rule_extracted, rule_conf = _rule_extract(
+            text,
+            cls.classification,
+            caption_for_reference=caption_for_reference,
+        )
 
         if rule_conf >= self._threshold or not self._llm_enabled:
             needs_review = rule_conf < self._threshold

@@ -69,6 +69,13 @@ class MatchStatus(StrEnum):
     EXPIRED = "EXPIRED"
 
 
+class HumanMatchFeedback(StrEnum):
+    """Operator label on a suggested pair (for dashboard training / filtering)."""
+
+    GOOD = "GOOD"
+    BAD = "BAD"
+
+
 class AlertType(StrEnum):
     PROFITABLE_MATCH = "PROFITABLE_MATCH"
     UNPRICED_MATCH = "UNPRICED_MATCH"

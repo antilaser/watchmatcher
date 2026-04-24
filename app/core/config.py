@@ -41,6 +41,10 @@ class Settings(BaseSettings):
     openai_api_key: str = ""
     openai_model: str = "gpt-4o-mini"
     openai_timeout_seconds: int = 30
+    openai_vision_model: str = "gpt-4o-mini"
+    openai_vision_timeout_seconds: int = 60
+    vision_enabled: bool = True
+    vision_max_image_bytes: int = 8_000_000
     llm_enabled: bool = True
     llm_fallback_enabled: bool = True
 
@@ -51,6 +55,17 @@ class Settings(BaseSettings):
     default_workspace_name: str = "default"
     default_min_match_confidence: float = 0.75
     default_min_profit_threshold: float = 300.0
+    # Unpriced pairs: alerts/dashboard use this floor (was hardcoded 0.85; ref-only pairs are often ~0.7–0.8).
+    unpriced_alert_min_match_confidence: float = Field(default=0.70, ge=0.0, le=1.0)
+    # When buy/sell share the same reference string, bump score so manual-review queues stay usable.
+    exact_reference_match_score_floor: float = Field(default=0.86, ge=0.0, le=1.0)
+    # Only pair offers/requests whose source WhatsApp message is at most this old (by original_timestamp).
+    match_candidate_max_age_days: int = Field(default=7, ge=1, le=365)
+    # Profit display: AUTO = same ISO as both legs when they match, else USD. Set EUR/USD/… to force XE conversion into that currency.
+    profit_reporting_currency: str = Field(default="AUTO")
+    # Xe Currency Data API (https://xecdapi.xe.com) — Basic auth: account id + api key from https://currencydata.xe.com/
+    xe_account_id: str = ""
+    xe_api_key: str = ""
     default_shipping_cost: float = 80.0
     default_fee_percent: float = 0.01
     default_fixed_fee: float = 0.0

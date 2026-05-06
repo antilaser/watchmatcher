@@ -8,6 +8,7 @@ from app.models.match import Match
 from app.models.parsed_message import ParsedMessage
 from app.models.raw_message import RawMessage
 from app.models.review_action import ReviewAction
+from app.models.search_alarm import SearchAlarm
 from app.models.sell_offer import SellOffer
 from app.models.source_account import SourceAccount
 from app.models.watch_entity import WatchEntity, WatchEntityAlias
@@ -22,6 +23,7 @@ __all__ = [
     "ParsedMessage",
     "RawMessage",
     "ReviewAction",
+    "SearchAlarm",
     "SellOffer",
     "SourceAccount",
     "WatchEntity",

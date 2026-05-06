@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from alembic import op
 
-revision = "0005_backfill_sell_offer_year_refs"
+revision = "0005_backfill_year_refs"
 down_revision = "0004_sell_offer_manufacture_year"
 branch_labels = None
 depends_on = None

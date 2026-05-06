@@ -4,6 +4,7 @@ import pytest
 
 from app.core.enums import MessageClassification
 from app.parsing.classifier import classify
+from app.parsing.year_constraints import extract_min_year
 
 
 @pytest.mark.parametrize(
@@ -63,7 +64,19 @@ def test_dealer_listing_wire_and_retail_is_sell():
 
 def test_ntq_wire_listing_is_sell():
     r = classify("NTQ 20+ 5167A for wire pls", has_image=False)
-    assert r.classification == MessageClassification.SELL_OFFER
+    assert r.classification == MessageClassification.BUY_REQUEST
+
+
+def test_wire_is_neutral_payment_method():
+    assert classify("326933 for wire", has_image=False).classification == MessageClassification.OTHER
+    assert classify("selling 326933 wire accepted", has_image=False).classification == MessageClassification.SELL_OFFER
+    assert classify("need 326933 wire payment", has_image=False).classification == MessageClassification.BUY_REQUEST
+
+
+def test_i_need_reference_for_wire_is_buy():
+    r = classify("I need a 2022+ 326933 full set for wire please", has_image=False)
+    assert r.classification == MessageClassification.BUY_REQUEST
+    assert extract_min_year("I need a 2022+ 326933 full set for wire please") == 2022
 
 
 def test_ntq_after_emoji_caption_is_buy():

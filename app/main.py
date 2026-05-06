@@ -5,11 +5,12 @@ from __future__ import annotations
 from contextlib import asynccontextmanager
 from pathlib import Path
 
-from fastapi import FastAPI, HTTPException
+from fastapi import Depends, FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse
 
 from app import __version__
+from app.api.v1.deps import require_dashboard_auth
 from app.api.v1.routes import (
     alerts,
     groups,
@@ -21,6 +22,7 @@ from app.api.v1.routes import (
     offers,
     requests,
     review,
+    search_alarms,
     sources,
     workspace,
 )
@@ -58,29 +60,31 @@ def create_app() -> FastAPI:
     app.include_router(health.router)
 
     prefix = settings.api_prefix
-    app.include_router(sources.router, prefix=prefix)
-    app.include_router(groups.router, prefix=prefix)
-    app.include_router(messages.router, prefix=prefix)
-    app.include_router(offers.router, prefix=prefix)
-    app.include_router(requests.router, prefix=prefix)
-    app.include_router(matches.router, prefix=prefix)
-    app.include_router(alerts.router, prefix=prefix)
-    app.include_router(review.router, prefix=prefix)
+    dashboard_auth = [Depends(require_dashboard_auth)]
+    app.include_router(sources.router, prefix=prefix, dependencies=dashboard_auth)
+    app.include_router(groups.router, prefix=prefix, dependencies=dashboard_auth)
+    app.include_router(messages.router, prefix=prefix, dependencies=dashboard_auth)
+    app.include_router(offers.router, prefix=prefix, dependencies=dashboard_auth)
+    app.include_router(requests.router, prefix=prefix, dependencies=dashboard_auth)
+    app.include_router(matches.router, prefix=prefix, dependencies=dashboard_auth)
+    app.include_router(alerts.router, prefix=prefix, dependencies=dashboard_auth)
+    app.include_router(search_alarms.router, prefix=prefix, dependencies=dashboard_auth)
+    app.include_router(review.router, prefix=prefix, dependencies=dashboard_auth)
     app.include_router(ingest.router, prefix=prefix)
-    app.include_router(workspace.router, prefix=prefix)
-    app.include_router(listings.router, prefix=prefix)
+    app.include_router(workspace.router, prefix=prefix, dependencies=dashboard_auth)
+    app.include_router(listings.router, prefix=prefix, dependencies=dashboard_auth)
 
     ui_dir = Path(__file__).resolve().parent / "ui"
     ui_index = ui_dir / "index.html"
     ui_listings = ui_dir / "listings.html"
 
-    @app.get("/dashboard")
+    @app.get("/dashboard", dependencies=dashboard_auth)
     async def dashboard_page() -> FileResponse:
         if not ui_index.is_file():
             raise HTTPException(status_code=404, detail="dashboard UI not found")
         return FileResponse(ui_index, media_type="text/html; charset=utf-8")
 
-    @app.get("/listings")
+    @app.get("/listings", dependencies=dashboard_auth)
     async def listings_page() -> FileResponse:
         if not ui_listings.is_file():
             raise HTTPException(status_code=404, detail="listings UI not found")

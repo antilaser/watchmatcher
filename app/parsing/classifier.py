@@ -70,6 +70,14 @@ def classify(text: str, *, has_image: bool = False) -> ClassificationResult:
         buy_hits = 1
     if buy_hits == 0 and re.search(r"(?i)\b(?:i\s*am|i'm|im)\s+buying\b", stripped):
         buy_hits = 1
+    # "Wire" just means bank transfer/payment method, not buy or sell intent.
+    # Give explicit personal need wording enough weight even when payment terms are present.
+    if re.search(r"(?i)\b(?:i|we)\s+need\s+(?:a|an|the|\d|[A-Z]*\d)", stripped):
+        strong_sell = re.search(r"(?i)\b(?:selling|for\s+sale|wts|available|asking|sell)\b", stripped)
+        if not strong_sell:
+            buy_hits += 1
+    if buy_hits == 0 and re.search(r"(?i)\bneed\s+(?:\d|[A-Z]*\d)", stripped):
+        buy_hits = 1
     # Short WhatsApp sells: "sell 126331" (avoid substring "sell " inside "resell …")
     if sell_hits == 0 and re.match(r"(?i)^\s*sell\s+", stripped):
         sell_hits = 1
@@ -78,8 +86,8 @@ def classify(text: str, *, has_image: bool = False) -> ClassificationResult:
     # NTQ = need quote / RFQ (buy). Word-boundary anywhere so "📷 NTQ 5167a" works; do not use a
     # padded " ntq " sell substring — that misfires after emoji/space before NTQ.
     if re.search(r"(?i)\bntq\b", stripped):
-        wire_cues = ("for wire", "wire pls", "wire 🔌", "wts", "fs ", "for sale", "asking")
-        if not any(c in t for c in wire_cues):
+        sell_cues = ("wts", "fs ", "for sale", "asking", "selling")
+        if not any(c in t for c in sell_cues):
             buy_hits += 1
     # "Any 116518LN …" — first token after "Any" is a reference (common in trading groups).
     if buy_hits == 0:

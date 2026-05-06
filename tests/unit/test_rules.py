@@ -47,11 +47,13 @@ def test_extract_reference(text, expected):
 def test_extract_reference_skips_plain_calendar_year():
     assert extract_reference("Rolex 2022 full stickers") is None
     assert extract_reference("Rolex 2022 126334") == "126334"
+    assert extract_reference("Rolex 1908 full set") == "1908"
 
 
 def test_split_calendar_year_reference_moves_year_out_of_reference():
     assert split_calendar_year_reference("2024", None) == (None, 2024)
     assert split_calendar_year_reference("2024", 2022) == (None, 2022)
+    assert split_calendar_year_reference("1908", None) == ("1908", None)
     assert split_calendar_year_reference("5711", None) == ("5711", None)
 
 
@@ -60,6 +62,8 @@ def test_split_calendar_year_reference_moves_year_out_of_reference():
     [
         ("Card dated 24.04.2019 complete", 2019),
         ("Warranty 15-03-18", 2018),
+        ("Card 04/26 full set", 2026),
+        ("Papers 11.2024", 2024),
         ("Rolex Datejust 2022 mint", 2022),
         ("1995 birth year piece", 1995),
         ("seen 01.01.2020 and 02.02.2021", 2020),
@@ -67,6 +71,11 @@ def test_split_calendar_year_reference_moves_year_out_of_reference():
 )
 def test_extract_year(text, expected_year):
     assert extract_year(text) == expected_year
+
+
+def test_extract_year_skips_rolex_1908_reference_exception():
+    assert extract_year("Rolex 1908 full set") is None
+    assert extract_year("Rolex 1908 card 2024") == 2024
 
 
 def test_extract_reference_prefer_caption():

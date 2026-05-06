@@ -10,6 +10,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.alerts.service import AlertService
+from app.alerts.search_alarm_service import SearchAlarmService
 from app.core.config import get_settings
 from app.core.enums import (
     BuyRequestStatus,
@@ -51,12 +52,14 @@ class PipelineService:
         normalization: NormalizationService | None = None,
         matching: MatchingService | None = None,
         alerts: AlertService | None = None,
+        search_alarms: SearchAlarmService | None = None,
     ) -> None:
         self.session = session
         self.parsing = parsing or ParsingService()
         self.normalization = normalization or NormalizationService(session)
         self.matching = matching or MatchingService(session)
         self.alerts = alerts or AlertService(session)
+        self.search_alarms = search_alarms or SearchAlarmService(session)
 
     async def process_raw_message(self, raw_message_id: UUID) -> None:
         raw = (
@@ -131,9 +134,11 @@ class PipelineService:
 
             if parse_result.classification.classification == MessageClassification.SELL_OFFER:
                 offer = await self._create_sell_offer(raw, parsed, parse_result.extracted, normalization)
+                await self.search_alarms.check_sell_offer(offer)
                 matches = await self.matching.match_for_new_offer(offer)
             else:
                 request = await self._create_buy_request(raw, parsed, parse_result.extracted, normalization)
+                await self.search_alarms.check_buy_request(request)
                 matches = await self.matching.match_for_new_request(request)
 
             for m in matches:

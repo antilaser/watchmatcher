@@ -31,6 +31,9 @@ class Settings(BaseSettings):
     jwt_secret: str = "change-me"
     jwt_algorithm: str = "HS256"
     jwt_expire_minutes: int = 1440
+    dashboard_auth_enabled: bool = True
+    dashboard_auth_username: str = "admin"
+    dashboard_auth_password: str = ""
     webhook_hmac_secret: str = "change-me-too"
 
     database_url: str = "postgresql+asyncpg://watchmatch:watchmatch@localhost:5432/watchmatch"
@@ -45,6 +48,9 @@ class Settings(BaseSettings):
     openai_vision_timeout_seconds: int = 60
     vision_enabled: bool = True
     vision_max_image_bytes: int = 8_000_000
+    media_storage_dir: str = "media"
+    listing_image_max_bytes: int = 5_000_000
+    listing_image_retention_days: int = 7
     llm_enabled: bool = True
     llm_fallback_enabled: bool = True
 
@@ -75,6 +81,8 @@ class Settings(BaseSettings):
     alert_dedupe_hours: int = 24
     expire_offer_days: int = 30
     expire_request_days: int = 60
+    listing_retention_days: int = 7
+    message_retention_days: int = 7
 
     @field_validator("api_cors_origins")
     @classmethod

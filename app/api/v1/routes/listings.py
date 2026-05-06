@@ -4,12 +4,15 @@ from __future__ import annotations
 
 from datetime import date, datetime, timedelta, timezone
 from decimal import Decimal
+from uuid import UUID
 
-from fastapi import APIRouter, Query
+from fastapi import APIRouter, HTTPException, Query, status
+from fastapi.responses import FileResponse
 from sqlalchemy import and_, func, select
 
 from app.api.v1.deps import SessionDep, WorkspaceDep
 from app.core.enums import SellOfferStatus
+from app.ingestion.image_store import resolve_media_path
 from app.models import Group, RawMessage, SellOffer
 from app.schemas.common import Page
 from app.schemas.offer import SellListingOut, SellOfferOut
@@ -83,15 +86,23 @@ def _to_listing_out(
     group_name: str,
     message_at: datetime,
     text_body: str | None,
+    metadata: dict | None,
 ) -> SellListingOut:
     base = SellOfferOut.model_validate(offer).model_dump()
     preview = (text_body or "").replace("\r\n", "\n").strip()
     if len(preview) > 400:
         preview = preview[:400] + "…"
+    meta = metadata or {}
+    image_url = (
+        f"/api/v1/listings/sell-offers/{offer.id}/image"
+        if meta.get("listing_image_path")
+        else None
+    )
     return SellListingOut(
         **base,
         group_name=group_name,
         message_at=message_at,
+        image_url=image_url,
         text_preview=preview or None,
     )
 
@@ -145,7 +156,13 @@ async def list_sell_listings(
     )
 
     base_join = (
-        select(SellOffer, Group.group_name, RawMessage.original_timestamp, RawMessage.text_body)
+        select(
+            SellOffer,
+            Group.group_name,
+            RawMessage.original_timestamp,
+            RawMessage.text_body,
+            RawMessage.metadata_json,
+        )
         .join(RawMessage, RawMessage.id == SellOffer.raw_message_id)
         .join(Group, Group.id == RawMessage.group_id)
         .where(where_clause)
@@ -166,5 +183,40 @@ async def list_sell_listings(
         )
     ).all()
 
-    items = [_to_listing_out(o, gn, ts, tb) for o, gn, ts, tb in rows]
+    items = [_to_listing_out(o, gn, ts, tb, meta) for o, gn, ts, tb, meta in rows]
     return Page[SellListingOut](items=items, total=total, limit=limit, offset=offset)
+
+
+@router.get("/sell-offers/{offer_id}/image")
+async def get_sell_listing_image(
+    offer_id: UUID,
+    workspace: WorkspaceDep,
+    session: SessionDep,
+):
+    row = (
+        await session.execute(
+            select(RawMessage.metadata_json)
+            .select_from(SellOffer)
+            .join(RawMessage, RawMessage.id == SellOffer.raw_message_id)
+            .where(SellOffer.id == offer_id)
+            .where(SellOffer.workspace_id == workspace.id)
+        )
+    ).one_or_none()
+    if row is None:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "listing image not found")
+
+    meta = row[0] or {}
+    rel_path = meta.get("listing_image_path")
+    if not isinstance(rel_path, str) or not rel_path:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "listing image not found")
+    try:
+        path = resolve_media_path(rel_path)
+    except ValueError as e:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "listing image not found") from e
+    if not path.exists():
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "listing image not found")
+
+    return FileResponse(
+        path,
+        media_type=meta.get("listing_image_mime_type") or "image/jpeg",
+    )

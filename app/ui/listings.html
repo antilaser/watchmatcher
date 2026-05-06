@@ -6,108 +6,142 @@
   <title>watchmatch — sell listings</title>
   <style>
     :root {
-      --bg: #0f1419;
-      --card: #1a2332;
-      --text: #e7ecf3;
-      --muted: #8b9cb3;
-      --accent: #3d8bfd;
-      --border: #2a3548;
+      --bg: #0b1118;
+      --bg-soft: #101824;
+      --card: #172235;
+      --card-strong: #1f2d44;
+      --text: #edf3fb;
+      --muted: #a2b1c5;
+      --accent: #4f9cff;
+      --accent-strong: #7bb7ff;
+      --border: #2b3a50;
       --ok: #3ecf8e;
       --danger: #e35d6a;
+      --shadow: 0 18px 50px rgba(0, 0, 0, 0.28);
     }
     * { box-sizing: border-box; }
     body {
       margin: 0;
       font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
-      background: var(--bg);
+      background:
+        radial-gradient(circle at top left, rgba(79, 156, 255, 0.14), transparent 32rem),
+        linear-gradient(180deg, #0d1420 0%, var(--bg) 42rem);
       color: var(--text);
-      line-height: 1.45;
+      line-height: 1.5;
       min-height: 100vh;
     }
     header {
-      padding: 1.25rem 1.5rem;
+      padding: 1.25rem clamp(1rem, 3vw, 2rem);
       border-bottom: 1px solid var(--border);
       display: flex;
       flex-wrap: wrap;
       align-items: center;
       gap: 1rem;
       justify-content: space-between;
+      background: rgba(11, 17, 24, 0.78);
+      backdrop-filter: blur(14px);
+      position: sticky;
+      top: 0;
+      z-index: 5;
     }
-    h1 { font-size: 1.25rem; font-weight: 600; margin: 0; }
-    .note { font-size: 0.85rem; color: var(--muted); max-width: 48rem; }
+    h1 { font-size: clamp(1.25rem, 2.8vw, 1.75rem); font-weight: 700; margin: 0; letter-spacing: -0.02em; }
+    .note { font-size: 0.9rem; color: var(--muted); max-width: 52rem; }
     nav { display: flex; gap: 0.5rem; flex-wrap: wrap; }
     nav a {
       color: var(--text);
       text-decoration: none;
       border: 1px solid var(--border);
-      padding: 0.45rem 0.85rem;
-      border-radius: 6px;
+      padding: 0.55rem 0.9rem;
+      border-radius: 999px;
       font-size: 0.875rem;
+      background: rgba(255, 255, 255, 0.03);
     }
-    nav a:hover { border-color: var(--accent); color: var(--accent); }
-    main { padding: 1rem 1.5rem 2rem; }
+    nav a:hover, nav a.active { border-color: var(--accent); color: var(--accent-strong); }
+    main { padding: 1rem clamp(0.75rem, 3vw, 2rem) 2rem; }
     .filters {
       display: grid;
-      grid-template-columns: repeat(auto-fill, minmax(11rem, 1fr));
+      grid-template-columns: repeat(auto-fit, minmax(10.5rem, 1fr));
       gap: 0.75rem 1rem;
-      padding: 1rem;
-      background: var(--card);
+      padding: clamp(0.9rem, 2vw, 1.2rem);
+      background: linear-gradient(180deg, rgba(31, 45, 68, 0.96), rgba(23, 34, 53, 0.96));
       border: 1px solid var(--border);
-      border-radius: 10px;
+      border-radius: 18px;
       margin-bottom: 1rem;
+      box-shadow: var(--shadow);
     }
-    .filters label { display: flex; flex-direction: column; gap: 0.25rem; font-size: 0.8rem; color: var(--muted); }
+    .filters label { display: flex; flex-direction: column; gap: 0.35rem; font-size: 0.78rem; color: var(--muted); font-weight: 650; letter-spacing: 0.01em; }
     .filters input, .filters select {
-      background: var(--bg);
+      width: 100%;
+      background: var(--bg-soft);
       color: var(--text);
       border: 1px solid var(--border);
-      border-radius: 6px;
-      padding: 0.4rem 0.5rem;
-      font-size: 0.875rem;
+      border-radius: 10px;
+      padding: 0.6rem 0.7rem;
+      font-size: 1rem;
+      min-height: 2.65rem;
+      outline: none;
+    }
+    .filters input:focus, .filters select:focus {
+      border-color: var(--accent);
+      box-shadow: 0 0 0 3px rgba(79, 156, 255, 0.15);
     }
     .filters .span2 { grid-column: span 2; }
-    @media (max-width: 520px) {
-      .filters .span2 { grid-column: span 1; }
-    }
-    .toolbar { display: flex; flex-wrap: wrap; gap: 0.5rem; align-items: center; margin-bottom: 0.75rem; }
+    .toolbar { display: flex; flex-wrap: wrap; gap: 0.5rem; align-items: center; margin-bottom: 0; }
     button {
       background: var(--accent);
       color: #fff;
       border: 1px solid var(--accent);
-      padding: 0.45rem 0.9rem;
-      border-radius: 6px;
+      padding: 0.65rem 1rem;
+      border-radius: 10px;
       cursor: pointer;
-      font-size: 0.875rem;
+      font-size: 0.95rem;
+      font-weight: 700;
+      min-height: 2.65rem;
     }
+    button:hover { filter: brightness(1.08); }
     button.secondary {
-      background: var(--card);
+      background: var(--bg-soft);
       color: var(--text);
       border-color: var(--border);
     }
     button.secondary:hover { border-color: var(--accent); }
     button:disabled { opacity: 0.5; cursor: not-allowed; }
-    #msg { font-size: 0.9rem; margin-bottom: 0.75rem; }
+    #msg { font-size: 0.9rem; margin-bottom: 0.75rem; min-height: 1.3rem; }
     #msg.error { color: var(--danger); }
     #msg.ok { color: var(--ok); }
+    .table-wrap {
+      overflow-x: auto;
+      border: 1px solid var(--border);
+      border-radius: 18px;
+      background: var(--card);
+      box-shadow: var(--shadow);
+    }
     table {
       width: 100%;
       border-collapse: collapse;
       font-size: 0.85rem;
-      background: var(--card);
-      border: 1px solid var(--border);
-      border-radius: 10px;
-      overflow: hidden;
+      min-width: 980px;
     }
     th, td {
       text-align: left;
-      padding: 0.55rem 0.65rem;
+      padding: 0.75rem 0.8rem;
       border-bottom: 1px solid var(--border);
       vertical-align: top;
     }
-    th { color: var(--muted); font-weight: 500; font-size: 0.78rem; text-transform: uppercase; letter-spacing: 0.03em; }
+    th {
+      color: var(--muted);
+      font-weight: 700;
+      font-size: 0.72rem;
+      text-transform: uppercase;
+      letter-spacing: 0.06em;
+      background: rgba(11, 17, 24, 0.46);
+      position: sticky;
+      top: 0;
+      z-index: 1;
+    }
     tr:last-child td { border-bottom: none; }
     tr:hover td { background: rgba(61, 139, 253, 0.06); }
-    .mono { font-family: ui-monospace, monospace; font-size: 0.8rem; }
+    .mono { font-family: ui-monospace, "SFMono-Regular", Menlo, monospace; font-size: 0.82rem; }
     .preview {
       max-width: 22rem;
       white-space: pre-wrap;
@@ -115,7 +149,126 @@
       color: var(--muted);
       font-size: 0.8rem;
     }
+    .thumb {
+      width: 58px;
+      height: 58px;
+      object-fit: cover;
+      border-radius: 6px;
+      border: 1px solid var(--border);
+      background: var(--bg);
+    }
     .pager { display: flex; gap: 0.5rem; align-items: center; margin-top: 1rem; flex-wrap: wrap; }
+    .panel {
+      margin: 1rem 0;
+      padding: clamp(0.9rem, 2vw, 1.2rem);
+      background: linear-gradient(180deg, rgba(31, 45, 68, 0.96), rgba(23, 34, 53, 0.96));
+      border: 1px solid var(--border);
+      border-radius: 18px;
+      box-shadow: var(--shadow);
+    }
+    .panel h2 { margin: 0 0 0.5rem; font-size: 1rem; }
+    .alarm-row {
+      display: flex;
+      gap: 0.5rem;
+      align-items: center;
+      justify-content: space-between;
+      padding: 0.7rem 0;
+      border-top: 1px solid var(--border);
+      flex-wrap: wrap;
+    }
+    .alarm-meta { color: var(--muted); font-size: 0.82rem; }
+    @media (max-width: 760px) {
+      header {
+        position: static;
+        align-items: stretch;
+      }
+      nav, nav a, .toolbar, .toolbar button, .pager button {
+        width: 100%;
+      }
+      nav a, .toolbar button, .pager button {
+        text-align: center;
+        justify-content: center;
+      }
+      .filters {
+        grid-template-columns: 1fr;
+        border-radius: 14px;
+      }
+      .alarm-row {
+        align-items: stretch;
+      }
+      .alarm-row button {
+        width: 100%;
+      }
+      .filters .span2 { grid-column: span 1; }
+      .table-wrap {
+        overflow: visible;
+        border: 0;
+        background: transparent;
+        box-shadow: none;
+      }
+      table, thead, tbody, tr, th, td {
+        display: block;
+      }
+      table {
+        min-width: 0;
+        background: transparent;
+      }
+      thead {
+        position: absolute;
+        width: 1px;
+        height: 1px;
+        overflow: hidden;
+        clip: rect(0 0 0 0);
+      }
+      tbody {
+        display: grid;
+        gap: 0.85rem;
+      }
+      tr {
+        border: 1px solid var(--border);
+        border-radius: 16px;
+        background: linear-gradient(180deg, rgba(31, 45, 68, 0.96), rgba(23, 34, 53, 0.96));
+        box-shadow: var(--shadow);
+        overflow: hidden;
+      }
+      tr:hover td { background: transparent; }
+      td {
+        display: grid;
+        grid-template-columns: minmax(6.5rem, 38%) 1fr;
+        gap: 0.75rem;
+        padding: 0.72rem 0.9rem;
+        border-bottom: 1px solid rgba(43, 58, 80, 0.72);
+      }
+      td::before {
+        content: attr(data-label);
+        color: var(--muted);
+        font-size: 0.72rem;
+        font-weight: 800;
+        text-transform: uppercase;
+        letter-spacing: 0.05em;
+      }
+      td.preview {
+        max-width: none;
+        grid-template-columns: 1fr;
+      }
+      td.preview::before {
+        margin-bottom: -0.35rem;
+      }
+      td[colspan] {
+        display: block;
+      }
+      td[colspan]::before {
+        display: none;
+      }
+      .thumb {
+        width: 72px;
+        height: 72px;
+      }
+      #pager-meta {
+        width: 100%;
+        text-align: center;
+      }
+    }
   </style>
 </head>
 <body>
@@ -127,7 +280,7 @@
       </p>
     </div>
     <nav>
-      <a href="/listings">Listings</a>
+      <a href="/listings" class="active">Listings</a>
       <a href="/dashboard">Alerts</a>
     </nav>
   </header>
@@ -173,7 +326,51 @@
       </div>
     </form>
     <div id="msg" role="status"></div>
-    <div style="overflow-x:auto;">
+    <section class="panel" aria-labelledby="alarms-heading">
+      <h2 id="alarms-heading">Search alarms</h2>
+      <p class="note" style="margin:0 0 0.8rem;">
+        Save a watch search and get a Telegram alert when a new sell listing or buy request matches.
+      </p>
+      <form class="filters" id="alarm-form" autocomplete="off" style="box-shadow:none;margin-bottom:0.8rem;">
+        <label class="span2">Alarm name
+          <input type="text" id="a-name" placeholder="e.g. Rolex 326933 under 22k" maxlength="120" />
+        </label>
+        <label>Type
+          <select id="a-type">
+            <option value="SELL">Sell listings</option>
+            <option value="BUY">Buy requests</option>
+            <option value="ANY">Both</option>
+          </select>
+        </label>
+        <label>Brand contains
+          <input type="text" id="a-brand" placeholder="Rolex" maxlength="128" />
+        </label>
+        <label>Reference / model #
+          <input type="text" id="a-ref" placeholder="326933" maxlength="64" />
+        </label>
+        <label>Year min
+          <input type="number" id="a-ymin" min="1900" max="2099" step="1" placeholder="Any" />
+        </label>
+        <label>Year max
+          <input type="number" id="a-ymax" min="1900" max="2099" step="1" placeholder="Any" />
+        </label>
+        <label>Price min
+          <input type="number" id="a-pmin" min="0" step="any" placeholder="Any" />
+        </label>
+        <label>Price max
+          <input type="number" id="a-pmax" min="0" step="any" placeholder="Any" />
+        </label>
+        <label>Currency
+          <input type="text" id="a-cur" placeholder="GBP" maxlength="8" />
+        </label>
+        <div class="toolbar span2" style="align-self:end;">
+          <button type="submit">Create alarm</button>
+          <button type="button" class="secondary" id="btn-alarms-refresh">Refresh alarms</button>
+        </div>
+      </form>
+      <div id="alarms-list" class="note">Loading alarms…</div>
+    </section>
+    <div class="table-wrap">
       <table>
         <thead>
           <tr>
@@ -182,13 +379,14 @@
             <th>Brand / family</th>
             <th>Ref</th>
             <th>Year</th>
+            <th>Picture</th>
             <th>Price</th>
             <th>Seller</th>
             <th>Preview</th>
           </tr>
         </thead>
         <tbody id="tbody">
-          <tr><td colspan="8" class="note">Use Search to load listings.</td></tr>
+          <tr><td colspan="9" class="note" data-label="">Use Search to load listings.</td></tr>
         </tbody>
       </table>
     </div>
@@ -249,19 +447,95 @@
       return escapeHtml(String(row.asking_price)) + (cur ? " " + escapeHtml(cur) : "");
     }
 
+    function alarmPayload() {
+      const payload = {
+        name: document.getElementById("a-name").value.trim(),
+        target_type: document.getElementById("a-type").value,
+        brand: document.getElementById("a-brand").value.trim() || null,
+        reference: document.getElementById("a-ref").value.trim() || null,
+        currency: document.getElementById("a-cur").value.trim() || null,
+      };
+      for (const [id, key] of [["a-ymin", "year_min"], ["a-ymax", "year_max"], ["a-pmin", "price_min"], ["a-pmax", "price_max"]]) {
+        const raw = document.getElementById(id).value.trim();
+        payload[key] = raw === "" ? null : Number(raw);
+      }
+      return payload;
+    }
+
+    function renderAlarm(a) {
+      const parts = [
+        a.target_type,
+        a.brand ? "brand: " + a.brand : null,
+        a.reference ? "ref: " + a.reference : null,
+        a.year_min || a.year_max ? "year: " + (a.year_min || "…") + "–" + (a.year_max || "…") : null,
+        a.price_min || a.price_max ? "price: " + (a.price_min || "…") + "–" + (a.price_max || "…") : null,
+        a.currency ? "currency: " + a.currency : null,
+      ].filter(Boolean).join(" · ");
+      return `<div class="alarm-row" data-id="${escapeHtml(a.id)}">
+        <div>
+          <strong>${escapeHtml(a.name)}</strong>
+          <div class="alarm-meta">${escapeHtml(parts)}${a.last_triggered_at ? " · last: " + escapeHtml(new Date(a.last_triggered_at).toLocaleString()) : ""}</div>
+        </div>
+        <div class="toolbar">
+          <button type="button" class="secondary" data-alarm-act="toggle">${a.is_active ? "Disable" : "Enable"}</button>
+          <button type="button" class="secondary" data-alarm-act="delete">Delete</button>
+        </div>
+      </div>`;
+    }
+
+    async function loadAlarms() {
+      const box = document.getElementById("alarms-list");
+      try {
+        const res = await fetch(API + "/search-alarms?limit=100", { credentials: "same-origin" });
+        if (!res.ok) throw new Error(await res.text());
+        const data = await res.json();
+        box.innerHTML = data.items && data.items.length
+          ? data.items.map(renderAlarm).join("")
+          : "No search alarms yet.";
+        box.querySelectorAll("[data-alarm-act]").forEach((btn) => {
+          btn.addEventListener("click", () => onAlarmAction(btn.closest(".alarm-row").dataset.id, btn.dataset.alarmAct));
+        });
+      } catch (e) {
+        box.textContent = "Could not load alarms: " + e;
+      }
+    }
+
+    async function onAlarmAction(id, act) {
+      if (act === "delete") {
+        if (!confirm("Delete this search alarm?")) return;
+        const res = await fetch(API + "/search-alarms/" + id, { method: "DELETE", credentials: "same-origin" });
+        if (!res.ok && res.status !== 204) setMsg(await res.text(), "error");
+      } else {
+        const row = document.querySelector(`.alarm-row[data-id="${CSS.escape(id)}"]`);
+        const enable = row && row.textContent.includes("Enable");
+        const res = await fetch(API + "/search-alarms/" + id, {
+          method: "PATCH",
+          credentials: "same-origin",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ is_active: enable }),
+        });
+        if (!res.ok) setMsg(await res.text(), "error");
+      }
+      await loadAlarms();
+    }
+
     function renderRow(row) {
       const when = new Date(row.message_at).toISOString().slice(0, 16).replace("T", " ");
       const bf = [row.brand_raw, row.family_raw].filter(Boolean).join(" · ") || "—";
       const yr = row.manufacture_year != null ? String(row.manufacture_year) : "—";
+      const pic = row.image_url
+        ? `<a href="${escapeHtml(row.image_url)}" target="_blank" rel="noopener"><img class="thumb" src="${escapeHtml(row.image_url)}" alt="listing image" loading="lazy" /></a>`
+        : "—";
       return `<tr>
-        <td class="mono">${escapeHtml(when)}</td>
-        <td>${escapeHtml(row.group_name || "")}</td>
-        <td>${escapeHtml(bf)}</td>
-        <td class="mono">${escapeHtml(row.reference_raw || "—")}</td>
-        <td class="mono">${escapeHtml(yr)}</td>
-        <td>${fmtPrice(row)}</td>
-        <td>${escapeHtml(row.seller_name || "—")}</td>
-        <td class="preview">${escapeHtml(row.text_preview || "")}</td>
+        <td class="mono" data-label="Message">${escapeHtml(when)}</td>
+        <td data-label="Group">${escapeHtml(row.group_name || "")}</td>
+        <td data-label="Brand">${escapeHtml(bf)}</td>
+        <td class="mono" data-label="Ref">${escapeHtml(row.reference_raw || "—")}</td>
+        <td class="mono" data-label="Year">${escapeHtml(yr)}</td>
+        <td data-label="Picture">${pic}</td>
+        <td data-label="Price">${fmtPrice(row)}</td>
+        <td data-label="Seller">${escapeHtml(row.seller_name || "—")}</td>
+        <td class="preview" data-label="Preview">${escapeHtml(row.text_preview || "")}</td>
       </tr>`;
     }
 
@@ -284,7 +558,7 @@
       const tb = document.getElementById("tbody");
       tb.innerHTML = (data.items && data.items.length)
         ? data.items.map(renderRow).join("")
-        : "<tr><td colspan=\"8\" class=\"note\">No rows for these filters.</td></tr>";
+        : "<tr><td colspan=\"9\" class=\"note\" data-label=\"\">No rows for these filters.</td></tr>";
       document.getElementById("btn-prev").disabled = offset <= 0;
       document.getElementById("btn-next").disabled = offset + LIMIT >= lastTotal;
       document.getElementById("pager-meta").textContent =
@@ -318,7 +592,30 @@
       offset = 0;
       load();
     });
+    document.getElementById("alarm-form").addEventListener("submit", async (e) => {
+      e.preventDefault();
+      const payload = alarmPayload();
+      if (!payload.name) {
+        setMsg("Alarm name is required.", "error");
+        return;
+      }
+      const res = await fetch(API + "/search-alarms", {
+        method: "POST",
+        credentials: "same-origin",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      });
+      if (!res.ok) {
+        setMsg("Alarm API " + res.status + " " + (await res.text()).slice(0, 200), "error");
+        return;
+      }
+      document.getElementById("alarm-form").reset();
+      setMsg("Search alarm created.", "ok");
+      await loadAlarms();
+    });
+    document.getElementById("btn-alarms-refresh").addEventListener("click", loadAlarms);
 
+    loadAlarms();
     load();
   </script>
 </body>

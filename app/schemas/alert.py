@@ -38,6 +38,8 @@ class AlertListItemOut(AlertOut):
 
     sell_group: AlertGroupRef | None = None
     buy_group: AlertGroupRef | None = None
+    seller_message_text: str | None = None
+    buyer_message_text: str | None = None
     match_human_feedback: str | None = None
 
 

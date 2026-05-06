@@ -13,6 +13,8 @@ from app.parsing.dictionaries import (
 )
 from app.parsing.regexes import PRICE_REGEX, REFERENCE_REGEX, YEAR_REGEX
 
+_REFERENCE_YEAR_EXCEPTIONS = {"1908"}
+
 
 def extract_brand(text: str) -> str | None:
     t = text.lower()
@@ -25,6 +27,8 @@ def extract_brand(text: str) -> str | None:
 
 def _is_plain_calendar_year_token(candidate: str) -> bool:
     """4-digit 19xx/20xx tokens are manufacturing or card dates, not model references."""
+    if candidate in _REFERENCE_YEAR_EXCEPTIONS:
+        return False
     if len(candidate) != 4 or not candidate.isdigit():
         return False
     val = int(candidate)
@@ -74,6 +78,10 @@ _EU_NUMERIC_DATE = re.compile(
     r"(?<![0-9])(\d{1,2})[./\-](\d{1,2})[./\-](\d{2}|\d{4})(?![0-9])",
     re.IGNORECASE,
 )
+_MONTH_YEAR_DATE = re.compile(
+    r"(?<![0-9])(\d{1,2})[./\-](\d{2}|\d{4})(?![0-9])",
+    re.IGNORECASE,
+)
 
 
 def _expand_two_digit_year(y: int) -> int:
@@ -103,13 +111,41 @@ def _year_from_eu_dates(text: str) -> int | None:
     return hits[0][1]
 
 
+def _year_from_month_year_dates(text: str) -> int | None:
+    """MM/YY, MM.YYYY, etc. on warranty cards. Example: 04/26 -> 2026."""
+    hits: list[tuple[int, int]] = []
+    eu_date_spans = [m.span() for m in _EU_NUMERIC_DATE.finditer(text)]
+    for m in _MONTH_YEAR_DATE.finditer(text):
+        if any(start <= m.start() and m.end() <= end for start, end in eu_date_spans):
+            continue
+        month = int(m.group(1))
+        y_raw = m.group(2)
+        year_full = _expand_two_digit_year(int(y_raw)) if len(y_raw) == 2 else int(y_raw)
+        if not (1 <= month <= 12):
+            continue
+        if not (1900 <= year_full <= 2099):
+            continue
+        hits.append((m.start(), year_full))
+    if not hits:
+        return None
+    hits.sort(key=lambda h: h[0])
+    return hits[0][1]
+
+
 def extract_year(text: str) -> int | None:
     """Manufacturing or card year: prefer explicit EU-style dates, then standalone 19xx/20xx."""
     y = _year_from_eu_dates(text)
     if y is not None:
         return y
-    m = YEAR_REGEX.search(text)
-    return int(m.group(1)) if m else None
+    y = _year_from_month_year_dates(text)
+    if y is not None:
+        return y
+    for m in YEAR_REGEX.finditer(text):
+        candidate = m.group(1)
+        if candidate in _REFERENCE_YEAR_EXCEPTIONS:
+            continue
+        return int(candidate)
+    return None
 
 
 def extract_condition(text: str) -> str | None:

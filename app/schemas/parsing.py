@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from pydantic import BaseModel, ConfigDict, Field, model_validator
+from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
 from app.core.enums import MessageClassification, ParseMethod
 from app.parsing.rules import split_calendar_year_reference
@@ -27,6 +27,11 @@ class ExtractedWatchTrade(BaseModel):
     location: str | None = None
     notes: str | None = None
     confidence: float = Field(default=0.0, ge=0.0, le=1.0)
+
+    @field_validator("confidence", mode="before")
+    @classmethod
+    def default_missing_confidence(cls, value):
+        return 0.0 if value is None else value
 
     @model_validator(mode="after")
     def separate_calendar_year_from_reference(self) -> "ExtractedWatchTrade":

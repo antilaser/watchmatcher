@@ -65,3 +65,4 @@ Thumbs.db
 logs/
 data/local/
 .alembic_local/
+media/

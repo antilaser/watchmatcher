@@ -66,7 +66,7 @@ async def list_alerts(
     buy_g = aliased(Group)
 
     list_stmt = (
-        select(Alert, sell_g, buy_g, Match.human_feedback)
+        select(Alert, sell_g, buy_g, Match.human_feedback, sell_rm.text_body, buy_rm.text_body)
         .outerjoin(Match, Alert.match_id == Match.id)
         .outerjoin(SellOffer, Match.sell_offer_id == SellOffer.id)
         .outerjoin(sell_rm, SellOffer.raw_message_id == sell_rm.id)
@@ -90,13 +90,16 @@ async def list_alerts(
     ).all()
 
     items: list[AlertListItemOut] = []
-    for alert, sell_gr, buy_gr, human_fb in rows:
+    for alert, sell_gr, buy_gr, human_fb, seller_text, buyer_text in rows:
         base = AlertOut.model_validate(alert).model_dump()
+        payload = alert.payload_json or {}
         items.append(
             AlertListItemOut(
                 **base,
                 sell_group=_group_ref(sell_gr),
                 buy_group=_group_ref(buy_gr),
+                seller_message_text=payload.get("seller_message_text") or seller_text,
+                buyer_message_text=payload.get("buyer_message_text") or buyer_text,
                 match_human_feedback=human_fb,
             )
         )

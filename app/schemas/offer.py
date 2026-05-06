@@ -36,4 +36,5 @@ class SellListingOut(SellOfferOut):
 
     group_name: str
     message_at: datetime
+    image_url: str | None = None
     text_preview: str | None = None

@@ -24,7 +24,8 @@ from app.matching.candidate_search import (
 from app.matching.profit import ProfitInputs, ProfitResult, calculate_profit
 from app.matching.reporting_fx import build_reporting_amounts_for_profit
 from app.matching.scoring import ScoreInputs, compute_match_score
-from app.models import BuyRequest, Match, SellOffer, Workspace
+from app.models import BuyRequest, Match, ParsedMessage, RawMessage, SellOffer, Workspace
+from app.parsing.year_constraints import extract_min_year
 
 log = get_logger(__name__)
 
@@ -83,6 +84,25 @@ class MatchingService:
         days = effective_match_candidate_max_age_days(self._settings, ws)
         return datetime.now(timezone.utc) - timedelta(days=days)
 
+    async def _request_min_year(self, request: BuyRequest) -> int | None:
+        row = (
+            await self.session.execute(
+                select(RawMessage.text_body, ParsedMessage.extracted_json)
+                .join(ParsedMessage, ParsedMessage.raw_message_id == RawMessage.id)
+                .where(RawMessage.id == request.raw_message_id)
+            )
+        ).one_or_none()
+        if row is None:
+            return None
+        text_body, extracted = row
+        year = extract_min_year(text_body)
+        if year is None:
+            return None
+        parsed_year = (extracted or {}).get("year")
+        if isinstance(parsed_year, int) and parsed_year != year:
+            return None
+        return year
+
     async def match_for_new_offer(self, offer: SellOffer) -> list[Match]:
         cutoff = await self._counterpart_message_cutoff(offer.workspace_id)
         candidates = await find_open_buy_requests_for_offer(
@@ -140,6 +160,21 @@ class MatchingService:
         ).scalar_one_or_none()
         if existing is not None:
             return existing
+
+        min_year = await self._request_min_year(request)
+        if (
+            min_year is not None
+            and offer.manufacture_year is not None
+            and offer.manufacture_year < min_year
+        ):
+            log.info(
+                "match_skipped_offer_too_old",
+                offer_id=str(offer.id),
+                request_id=str(request.id),
+                offer_year=offer.manufacture_year,
+                request_min_year=min_year,
+            )
+            return None
 
         match_type, ref_s, brand_s, fam_s = _decide_match_type(offer, request)
         score = compute_match_score(

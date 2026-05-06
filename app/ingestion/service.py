@@ -11,6 +11,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.enums import GroupType, ProcessingStatus
 from app.core.logging import get_logger
 from app.ingestion.dedupe import compute_dedupe_hash
+from app.ingestion.image_store import store_listing_image
 from app.models import Group, RawMessage, SourceAccount, Workspace
 from app.schemas.message import IncomingMessage
 
@@ -117,6 +118,19 @@ class IngestionService:
         )
         self.session.add(row)
         await self.session.flush()
+        if message.image_base64 and message.image_base64.strip():
+            try:
+                row.metadata_json = {
+                    **dict(row.metadata_json or {}),
+                    **store_listing_image(
+                        row.id,
+                        image_base64=message.image_base64.strip(),
+                        image_mime_type=message.image_mime_type or "image/jpeg",
+                        message_at=message.original_timestamp,
+                    ),
+                }
+            except ValueError as e:
+                log.warning("listing_image_store_skipped", raw_message_id=str(row.id), error=str(e))
         log.info(
             "raw_message_ingested",
             raw_message_id=str(row.id),

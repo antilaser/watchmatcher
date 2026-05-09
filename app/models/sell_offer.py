@@ -49,6 +49,12 @@ class SellOffer(UUIDPKMixin, TimestampMixin, Base):
     )
     condition_raw: Mapped[str | None] = mapped_column(String(128), nullable=True)
     set_completeness_raw: Mapped[str | None] = mapped_column(String(128), nullable=True)
+    dial_color: Mapped[str | None] = mapped_column(String(64), nullable=True, index=True)
+    dial_variant: Mapped[str | None] = mapped_column(String(64), nullable=True, index=True)
+    bezel_color: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    case_material: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    bracelet_type: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    visual_confidence: Mapped[float | None] = mapped_column(Numeric(5, 4), nullable=True)
 
     asking_price: Mapped[Decimal | None] = mapped_column(Numeric(12, 2), nullable=True, index=True)
     currency: Mapped[str | None] = mapped_column(String(8), nullable=True)

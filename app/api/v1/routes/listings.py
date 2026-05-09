@@ -37,6 +37,9 @@ def _listing_where(
     price_min: Decimal | None,
     price_max: Decimal | None,
     currency: str | None,
+    dial_color: str | None,
+    dial_variant: str | None,
+    bezel_color: str | None,
     message_on_or_after: date | None,
     message_on_or_before: date | None,
     year: int | None,
@@ -66,6 +69,15 @@ def _listing_where(
     if currency:
         c = currency.strip().upper()[:8]
         clauses.append(SellOffer.currency == c)
+    if dial_color:
+        dc = dial_color.strip().lower()[:64]
+        clauses.append(SellOffer.dial_color == dc)
+    if dial_variant:
+        dv = dial_variant.strip().lower()[:64]
+        clauses.append(SellOffer.dial_variant == dv)
+    if bezel_color:
+        bc = bezel_color.strip().lower()[:64]
+        clauses.append(SellOffer.bezel_color == bc)
     if message_on_or_after is not None:
         clauses.append(RawMessage.original_timestamp >= _utc_start(message_on_or_after))
     if message_on_or_before is not None:
@@ -120,6 +132,9 @@ async def list_sell_listings(
     price_min: Decimal | None = Query(default=None, ge=0),
     price_max: Decimal | None = Query(default=None, ge=0),
     currency: str | None = Query(default=None, max_length=8),
+    dial_color: str | None = Query(default=None, max_length=64),
+    dial_variant: str | None = Query(default=None, max_length=64),
+    bezel_color: str | None = Query(default=None, max_length=64),
     message_on_or_after: date | None = Query(
         default=None,
         description="WhatsApp message date (UTC day start), inclusive",
@@ -148,6 +163,9 @@ async def list_sell_listings(
         price_min=price_min,
         price_max=price_max,
         currency=currency,
+        dial_color=dial_color,
+        dial_variant=dial_variant,
+        bezel_color=bezel_color,
         message_on_or_after=message_on_or_after,
         message_on_or_before=message_on_or_before,
         year=year,

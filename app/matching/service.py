@@ -25,11 +25,68 @@ from app.matching.profit import ProfitInputs, ProfitResult, calculate_profit
 from app.matching.reporting_fx import build_reporting_amounts_for_profit
 from app.matching.scoring import ScoreInputs, compute_match_score
 from app.models import BuyRequest, Match, ParsedMessage, RawMessage, SellOffer, Workspace
+from app.parsing.visual_attributes import extract_visual_attributes
 from app.parsing.year_constraints import extract_min_year
 
 log = get_logger(__name__)
 
 _MIN_REF_PREFIX_LEN = 4
+
+
+def _norm_attr(value: str | None) -> str | None:
+    if value is None:
+        return None
+    v = str(value).strip().lower()
+    return v or None
+
+
+def _same_attr(a: str | None, b: str | None) -> bool | None:
+    av = _norm_attr(a)
+    bv = _norm_attr(b)
+    if not av or not bv:
+        return None
+    return av == bv
+
+
+def _visual_score_adjustment(offer: SellOffer, request: BuyRequest) -> tuple[float, dict]:
+    """Reward matching visual attributes and penalize explicit conflicts.
+
+    Buyer/request attributes are treated as constraints when present. Missing seller
+    visual data is neutral because many messages do not include analyzable images.
+    """
+    adjustments: list[float] = []
+    details: dict[str, dict[str, str | bool | None]] = {}
+    weights = {
+        "dial_variant": 0.24,
+        "dial_color": 0.18,
+        "bezel_color": 0.12,
+        "case_material": 0.08,
+        "bracelet_type": 0.05,
+    }
+    for field, weight in weights.items():
+        offer_value = getattr(offer, field)
+        request_value = getattr(request, field)
+        same = _same_attr(offer_value, request_value)
+        details[field] = {
+            "seller": offer_value,
+            "buyer": request_value,
+            "matches": same,
+        }
+        if same is True:
+            adjustments.append(weight / 3)
+        elif same is False and request_value:
+            adjustments.append(-weight)
+    total = sum(adjustments)
+    return total, details
+
+
+def _visual_constraint_conflict(visual_details: dict) -> str | None:
+    """Return the first visual field that makes buyer/request constraints incompatible."""
+    for field in ("dial_variant", "dial_color", "bezel_color", "case_material", "bracelet_type"):
+        values = visual_details.get(field) or {}
+        if values.get("buyer") and values.get("seller") and values.get("matches") is False:
+            return field
+    return None
 
 
 def _refs_compatible(offer_ref: str | None, request_ref: str | None) -> bool:
@@ -103,6 +160,40 @@ class MatchingService:
             return None
         return year
 
+    async def _visual_attrs_from_raw_text(self, raw_message_id: UUID) -> dict[str, str | None]:
+        row = (
+            await self.session.execute(
+                select(RawMessage.text_body).where(RawMessage.id == raw_message_id)
+            )
+        ).scalar_one_or_none()
+        extracted = extract_visual_attributes(row or "")
+        return {
+            "dial_color": extracted.dial_color,
+            "dial_variant": extracted.dial_variant,
+            "bezel_color": extracted.bezel_color,
+            "case_material": extracted.case_material,
+            "bracelet_type": extracted.bracelet_type,
+        }
+
+    async def _fill_missing_visual_attrs(self, item: SellOffer | BuyRequest) -> None:
+        if all(
+            getattr(item, field)
+            for field in ("dial_color", "dial_variant", "bezel_color", "case_material", "bracelet_type")
+        ):
+            return
+        fallback = await self._visual_attrs_from_raw_text(item.raw_message_id)
+        changed = False
+        for field, value in fallback.items():
+            if value and not getattr(item, field):
+                setattr(item, field, value)
+                changed = True
+        if changed:
+            log.info(
+                "visual_attrs_backfilled_from_text",
+                raw_message_id=str(item.raw_message_id),
+                fields={k: v for k, v in fallback.items() if v},
+            )
+
     async def match_for_new_offer(self, offer: SellOffer) -> list[Match]:
         cutoff = await self._counterpart_message_cutoff(offer.workspace_id)
         candidates = await find_open_buy_requests_for_offer(
@@ -161,6 +252,9 @@ class MatchingService:
         if existing is not None:
             return existing
 
+        await self._fill_missing_visual_attrs(offer)
+        await self._fill_missing_visual_attrs(request)
+
         min_year = await self._request_min_year(request)
         if (
             min_year is not None
@@ -202,6 +296,20 @@ class MatchingService:
             ).scalar_one_or_none()
             floor = effective_exact_reference_floor(self._settings, ws)
             score = max(score, floor)
+
+        visual_adjustment, visual_details = _visual_score_adjustment(offer, request)
+        visual_conflict = _visual_constraint_conflict(visual_details)
+        if visual_conflict:
+            log.info(
+                "match_skipped_visual_conflict",
+                offer_id=str(offer.id),
+                request_id=str(request.id),
+                field=visual_conflict,
+                visual_attributes=visual_details,
+            )
+            return None
+        score_before_visual = score
+        score = max(0.0, min(1.0, score + visual_adjustment))
 
         ship = Decimal(str(self._settings.default_shipping_cost))
         fee_p = Decimal(str(self._settings.default_fee_percent))
@@ -292,6 +400,9 @@ class MatchingService:
                 "brand_score": brand_s,
                 "family_score": fam_s,
                 "score": score,
+                "score_before_visual_adjustment": score_before_visual,
+                "visual_score_adjustment": visual_adjustment,
+                "visual_attributes": visual_details,
                 "exact_reference_string_match": exact_ref,
                 "profit_breakdown": profit_breakdown,
             },

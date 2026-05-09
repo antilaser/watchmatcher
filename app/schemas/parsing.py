@@ -21,6 +21,12 @@ class ExtractedWatchTrade(BaseModel):
     condition: str | None = None
     full_set: bool | None = None
     year: int | None = None
+    dial_color: str | None = Field(default=None, max_length=64)
+    dial_variant: str | None = Field(default=None, max_length=64)
+    bezel_color: str | None = Field(default=None, max_length=64)
+    case_material: str | None = Field(default=None, max_length=64)
+    bracelet_type: str | None = Field(default=None, max_length=64)
+    visual_confidence: float | None = Field(default=None, ge=0.0, le=1.0)
     price: float | None = Field(default=None, ge=0)
     currency: str | None = Field(default=None, max_length=8)
     negotiable: bool | None = None

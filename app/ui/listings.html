@@ -46,6 +46,14 @@
     }
     h1 { font-size: clamp(1.25rem, 2.8vw, 1.75rem); font-weight: 700; margin: 0; letter-spacing: -0.02em; }
     .note { font-size: 0.9rem; color: var(--muted); max-width: 52rem; }
+    .topbar-title { display: flex; flex-direction: column; gap: 0.35rem; }
+    .topbar-actions { display: flex; align-items: center; gap: 0.75rem; }
+    .menu-toggle {
+      display: none;
+      background: var(--bg-soft);
+      color: var(--text);
+      border-color: var(--border);
+    }
     nav { display: flex; gap: 0.5rem; flex-wrap: wrap; }
     nav a {
       color: var(--text);
@@ -158,32 +166,28 @@
       background: var(--bg);
     }
     .pager { display: flex; gap: 0.5rem; align-items: center; margin-top: 1rem; flex-wrap: wrap; }
-    .panel {
-      margin: 1rem 0;
-      padding: clamp(0.9rem, 2vw, 1.2rem);
-      background: linear-gradient(180deg, rgba(31, 45, 68, 0.96), rgba(23, 34, 53, 0.96));
-      border: 1px solid var(--border);
-      border-radius: 18px;
-      box-shadow: var(--shadow);
-    }
-    .panel h2 { margin: 0 0 0.5rem; font-size: 1rem; }
-    .alarm-row {
-      display: flex;
-      gap: 0.5rem;
-      align-items: center;
-      justify-content: space-between;
-      padding: 0.7rem 0;
-      border-top: 1px solid var(--border);
-      flex-wrap: wrap;
-    }
-    .alarm-meta { color: var(--muted); font-size: 0.82rem; }
     @media (max-width: 760px) {
       header {
         position: static;
         align-items: stretch;
       }
-      nav, nav a, .toolbar, .toolbar button, .pager button {
+      .topbar-actions, nav, nav a, .toolbar, .toolbar button, .pager button {
         width: 100%;
+      }
+      .topbar-actions {
+        align-items: stretch;
+        flex-direction: column;
+      }
+      .menu-toggle {
+        display: block;
+        width: 100%;
+      }
+      nav {
+        display: none;
+        flex-direction: column;
+      }
+      nav.open {
+        display: flex;
       }
       nav a, .toolbar button, .pager button {
         text-align: center;
@@ -192,12 +196,6 @@
       .filters {
         grid-template-columns: 1fr;
         border-radius: 14px;
-      }
-      .alarm-row {
-        align-items: stretch;
-      }
-      .alarm-row button {
-        width: 100%;
       }
       .filters .span2 { grid-column: span 1; }
       .table-wrap {
@@ -273,16 +271,20 @@
 </head>
 <body>
   <header>
-    <div>
+    <div class="topbar-title">
       <h1>watchmatch — sell listings</h1>
       <p class="note" style="margin:0.35rem 0 0;">
         Active sell offers from every WhatsApp group in the workspace. Card / caption years (19xx–20xx and DD.MM.YYYY dates) are parsed into <strong>Year</strong>; model references stay in Ref.
       </p>
     </div>
-    <nav>
-      <a href="/listings" class="active">Listings</a>
-      <a href="/dashboard">Alerts</a>
-    </nav>
+    <div class="topbar-actions">
+      <button type="button" class="menu-toggle" id="menu-toggle">Menu</button>
+      <nav id="main-nav" aria-label="Primary navigation">
+        <a href="/dashboard">Alerts</a>
+        <a href="/listings" class="active">Listings</a>
+        <a href="/alarms">Alarms</a>
+      </nav>
+    </div>
   </header>
   <main>
     <form class="filters" id="filters" autocomplete="off">
@@ -300,6 +302,12 @@
       </label>
       <label>Currency
         <input type="text" id="f-cur" placeholder="GBP" maxlength="8" />
+      </label>
+      <label>Dial color
+        <input type="text" id="f-dial" placeholder="black, blue, panda" maxlength="64" />
+      </label>
+      <label>Bezel color
+        <input type="text" id="f-bezel" placeholder="green, red/blue" maxlength="64" />
       </label>
       <label>Message from (date)
         <input type="date" id="f-dfrom" />
@@ -326,50 +334,6 @@
       </div>
     </form>
     <div id="msg" role="status"></div>
-    <section class="panel" aria-labelledby="alarms-heading">
-      <h2 id="alarms-heading">Search alarms</h2>
-      <p class="note" style="margin:0 0 0.8rem;">
-        Save a watch search and get a Telegram alert when a new sell listing or buy request matches.
-      </p>
-      <form class="filters" id="alarm-form" autocomplete="off" style="box-shadow:none;margin-bottom:0.8rem;">
-        <label class="span2">Alarm name
-          <input type="text" id="a-name" placeholder="e.g. Rolex 326933 under 22k" maxlength="120" />
-        </label>
-        <label>Type
-          <select id="a-type">
-            <option value="SELL">Sell listings</option>
-            <option value="BUY">Buy requests</option>
-            <option value="ANY">Both</option>
-          </select>
-        </label>
-        <label>Brand contains
-          <input type="text" id="a-brand" placeholder="Rolex" maxlength="128" />
-        </label>
-        <label>Reference / model #
-          <input type="text" id="a-ref" placeholder="326933" maxlength="64" />
-        </label>
-        <label>Year min
-          <input type="number" id="a-ymin" min="1900" max="2099" step="1" placeholder="Any" />
-        </label>
-        <label>Year max
-          <input type="number" id="a-ymax" min="1900" max="2099" step="1" placeholder="Any" />
-        </label>
-        <label>Price min
-          <input type="number" id="a-pmin" min="0" step="any" placeholder="Any" />
-        </label>
-        <label>Price max
-          <input type="number" id="a-pmax" min="0" step="any" placeholder="Any" />
-        </label>
-        <label>Currency
-          <input type="text" id="a-cur" placeholder="GBP" maxlength="8" />
-        </label>
-        <div class="toolbar span2" style="align-self:end;">
-          <button type="submit">Create alarm</button>
-          <button type="button" class="secondary" id="btn-alarms-refresh">Refresh alarms</button>
-        </div>
-      </form>
-      <div id="alarms-list" class="note">Loading alarms…</div>
-    </section>
     <div class="table-wrap">
       <table>
         <thead>
@@ -379,6 +343,7 @@
             <th>Brand / family</th>
             <th>Ref</th>
             <th>Year</th>
+            <th>Visual</th>
             <th>Picture</th>
             <th>Price</th>
             <th>Seller</th>
@@ -386,7 +351,7 @@
           </tr>
         </thead>
         <tbody id="tbody">
-          <tr><td colspan="9" class="note" data-label="">Use Search to load listings.</td></tr>
+          <tr><td colspan="10" class="note" data-label="">Use Search to load listings.</td></tr>
         </tbody>
       </table>
     </div>
@@ -432,6 +397,10 @@
       if (pmax !== "") p.set("price_max", pmax);
       const cur = document.getElementById("f-cur").value.trim();
       if (cur) p.set("currency", cur);
+      const dial = document.getElementById("f-dial").value.trim();
+      if (dial) p.set("dial_color", dial.toLowerCase());
+      const bezel = document.getElementById("f-bezel").value.trim();
+      if (bezel) p.set("bezel_color", bezel.toLowerCase());
       const df = document.getElementById("f-dfrom").value;
       if (df) p.set("message_on_or_after", df);
       const dt = document.getElementById("f-dto").value;
@@ -447,82 +416,17 @@
       return escapeHtml(String(row.asking_price)) + (cur ? " " + escapeHtml(cur) : "");
     }
 
-    function alarmPayload() {
-      const payload = {
-        name: document.getElementById("a-name").value.trim(),
-        target_type: document.getElementById("a-type").value,
-        brand: document.getElementById("a-brand").value.trim() || null,
-        reference: document.getElementById("a-ref").value.trim() || null,
-        currency: document.getElementById("a-cur").value.trim() || null,
-      };
-      for (const [id, key] of [["a-ymin", "year_min"], ["a-ymax", "year_max"], ["a-pmin", "price_min"], ["a-pmax", "price_max"]]) {
-        const raw = document.getElementById(id).value.trim();
-        payload[key] = raw === "" ? null : Number(raw);
-      }
-      return payload;
-    }
-
-    function renderAlarm(a) {
-      const parts = [
-        a.target_type,
-        a.brand ? "brand: " + a.brand : null,
-        a.reference ? "ref: " + a.reference : null,
-        a.year_min || a.year_max ? "year: " + (a.year_min || "…") + "–" + (a.year_max || "…") : null,
-        a.price_min || a.price_max ? "price: " + (a.price_min || "…") + "–" + (a.price_max || "…") : null,
-        a.currency ? "currency: " + a.currency : null,
-      ].filter(Boolean).join(" · ");
-      return `<div class="alarm-row" data-id="${escapeHtml(a.id)}">
-        <div>
-          <strong>${escapeHtml(a.name)}</strong>
-          <div class="alarm-meta">${escapeHtml(parts)}${a.last_triggered_at ? " · last: " + escapeHtml(new Date(a.last_triggered_at).toLocaleString()) : ""}</div>
-        </div>
-        <div class="toolbar">
-          <button type="button" class="secondary" data-alarm-act="toggle">${a.is_active ? "Disable" : "Enable"}</button>
-          <button type="button" class="secondary" data-alarm-act="delete">Delete</button>
-        </div>
-      </div>`;
-    }
-
-    async function loadAlarms() {
-      const box = document.getElementById("alarms-list");
-      try {
-        const res = await fetch(API + "/search-alarms?limit=100", { credentials: "same-origin" });
-        if (!res.ok) throw new Error(await res.text());
-        const data = await res.json();
-        box.innerHTML = data.items && data.items.length
-          ? data.items.map(renderAlarm).join("")
-          : "No search alarms yet.";
-        box.querySelectorAll("[data-alarm-act]").forEach((btn) => {
-          btn.addEventListener("click", () => onAlarmAction(btn.closest(".alarm-row").dataset.id, btn.dataset.alarmAct));
-        });
-      } catch (e) {
-        box.textContent = "Could not load alarms: " + e;
-      }
-    }
-
-    async function onAlarmAction(id, act) {
-      if (act === "delete") {
-        if (!confirm("Delete this search alarm?")) return;
-        const res = await fetch(API + "/search-alarms/" + id, { method: "DELETE", credentials: "same-origin" });
-        if (!res.ok && res.status !== 204) setMsg(await res.text(), "error");
-      } else {
-        const row = document.querySelector(`.alarm-row[data-id="${CSS.escape(id)}"]`);
-        const enable = row && row.textContent.includes("Enable");
-        const res = await fetch(API + "/search-alarms/" + id, {
-          method: "PATCH",
-          credentials: "same-origin",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ is_active: enable }),
-        });
-        if (!res.ok) setMsg(await res.text(), "error");
-      }
-      await loadAlarms();
-    }
-
     function renderRow(row) {
       const when = new Date(row.message_at).toISOString().slice(0, 16).replace("T", " ");
       const bf = [row.brand_raw, row.family_raw].filter(Boolean).join(" · ") || "—";
       const yr = row.manufacture_year != null ? String(row.manufacture_year) : "—";
+      const visual = [
+        row.dial_color ? "dial: " + row.dial_color : null,
+        row.dial_variant ? "variant: " + row.dial_variant : null,
+        row.bezel_color ? "bezel: " + row.bezel_color : null,
+        row.case_material ? "case: " + row.case_material : null,
+        row.bracelet_type ? "bracelet: " + row.bracelet_type : null,
+      ].filter(Boolean).join(" · ") || "—";
       const pic = row.image_url
         ? `<a href="${escapeHtml(row.image_url)}" target="_blank" rel="noopener"><img class="thumb" src="${escapeHtml(row.image_url)}" alt="listing image" loading="lazy" /></a>`
         : "—";
@@ -532,6 +436,7 @@
         <td data-label="Brand">${escapeHtml(bf)}</td>
         <td class="mono" data-label="Ref">${escapeHtml(row.reference_raw || "—")}</td>
         <td class="mono" data-label="Year">${escapeHtml(yr)}</td>
+        <td data-label="Visual">${escapeHtml(visual)}</td>
         <td data-label="Picture">${pic}</td>
         <td data-label="Price">${fmtPrice(row)}</td>
         <td data-label="Seller">${escapeHtml(row.seller_name || "—")}</td>
@@ -558,7 +463,7 @@
       const tb = document.getElementById("tbody");
       tb.innerHTML = (data.items && data.items.length)
         ? data.items.map(renderRow).join("")
-        : "<tr><td colspan=\"9\" class=\"note\" data-label=\"\">No rows for these filters.</td></tr>";
+        : "<tr><td colspan=\"10\" class=\"note\" data-label=\"\">No rows for these filters.</td></tr>";
       document.getElementById("btn-prev").disabled = offset <= 0;
       document.getElementById("btn-next").disabled = offset + LIMIT >= lastTotal;
       document.getElementById("pager-meta").textContent =
@@ -572,6 +477,8 @@
       document.getElementById("f-pmin").value = "";
       document.getElementById("f-pmax").value = "";
       document.getElementById("f-cur").value = "";
+      document.getElementById("f-dial").value = "";
+      document.getElementById("f-bezel").value = "";
       document.getElementById("f-dfrom").value = "";
       document.getElementById("f-dto").value = "";
       document.getElementById("f-year").value = "";
@@ -592,30 +499,9 @@
       offset = 0;
       load();
     });
-    document.getElementById("alarm-form").addEventListener("submit", async (e) => {
-      e.preventDefault();
-      const payload = alarmPayload();
-      if (!payload.name) {
-        setMsg("Alarm name is required.", "error");
-        return;
-      }
-      const res = await fetch(API + "/search-alarms", {
-        method: "POST",
-        credentials: "same-origin",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(payload),
-      });
-      if (!res.ok) {
-        setMsg("Alarm API " + res.status + " " + (await res.text()).slice(0, 200), "error");
-        return;
-      }
-      document.getElementById("alarm-form").reset();
-      setMsg("Search alarm created.", "ok");
-      await loadAlarms();
+    document.getElementById("menu-toggle").addEventListener("click", () => {
+      document.getElementById("main-nav").classList.toggle("open");
     });
-    document.getElementById("btn-alarms-refresh").addEventListener("click", loadAlarms);
-
-    loadAlarms();
     load();
   </script>
 </body>

@@ -22,6 +22,10 @@ class SearchAlarmBase(BaseModel):
     price_min: Decimal | None = Field(default=None, ge=0)
     price_max: Decimal | None = Field(default=None, ge=0)
     currency: str | None = Field(default=None, max_length=8)
+    dial_color: str | None = Field(default=None, max_length=64)
+    bezel_color: str | None = Field(default=None, max_length=64)
+    case_material: str | None = Field(default=None, max_length=64)
+    bracelet_type: str | None = Field(default=None, max_length=64)
 
 
 class SearchAlarmCreate(SearchAlarmBase):
@@ -39,6 +43,10 @@ class SearchAlarmUpdate(BaseModel):
     price_min: Decimal | None = Field(default=None, ge=0)
     price_max: Decimal | None = Field(default=None, ge=0)
     currency: str | None = Field(default=None, max_length=8)
+    dial_color: str | None = Field(default=None, max_length=64)
+    bezel_color: str | None = Field(default=None, max_length=64)
+    case_material: str | None = Field(default=None, max_length=64)
+    bracelet_type: str | None = Field(default=None, max_length=64)
 
 
 class SearchAlarmOut(SearchAlarmBase):
@@ -49,3 +57,20 @@ class SearchAlarmOut(SearchAlarmBase):
     last_triggered_at: datetime | None
     created_at: datetime
     updated_at: datetime
+
+
+class SearchAlarmTriggerOut(BaseModel):
+    id: UUID
+    raw_message_id: UUID | None
+    sender_name: str | None = None
+    sender_external_id: str | None = None
+    group_name: str | None = None
+    group_invite_url: str | None = None
+    external_message_id: str | None = None
+    message_at: datetime | None = None
+    status: str
+    channel: str
+    summary: str | None = None
+    seller_message_text: str | None = None
+    buyer_message_text: str | None = None
+    created_at: datetime

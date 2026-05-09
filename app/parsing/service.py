@@ -16,6 +16,7 @@ from app.parsing.rules import (
     extract_year,
     is_negotiable,
 )
+from app.parsing.visual_attributes import extract_visual_attributes
 from app.schemas.parsing import (
     ClassificationResult,
     ExtractedWatchTrade,
@@ -38,6 +39,7 @@ def _rule_extract(
     full_set_str = extract_set_completeness(text)
     year = extract_year(text)
     negotiable = is_negotiable(text)
+    visual = extract_visual_attributes(text)
 
     score_components: list[float] = []
     if brand:
@@ -61,6 +63,12 @@ def _rule_extract(
         condition=condition,
         full_set=full_set_str == "full_set" if full_set_str else None,
         year=year,
+        dial_color=visual.dial_color,
+        dial_variant=visual.dial_variant,
+        bezel_color=visual.bezel_color,
+        case_material=visual.case_material,
+        bracelet_type=visual.bracelet_type,
+        visual_confidence=visual.visual_confidence,
         negotiable=negotiable,
         confidence=min(1.0, confidence),
     )
@@ -81,6 +89,7 @@ class ParsingService:
         has_image: bool = False,
         classification_text: str | None = None,
         caption_for_reference: str | None = None,
+        allow_llm: bool = True,
     ) -> ParseResult:
         cls_src = (
             classification_text.strip()
@@ -105,7 +114,7 @@ class ParsingService:
             caption_for_reference=caption_for_reference,
         )
 
-        if rule_conf >= self._threshold or not self._llm_enabled:
+        if rule_conf >= self._threshold or not self._llm_enabled or not allow_llm:
             needs_review = rule_conf < self._threshold
             return ParseResult(
                 classification=cls,
@@ -150,6 +159,12 @@ def _merge(rule: ExtractedWatchTrade, llm: ExtractedWatchTrade) -> ExtractedWatc
         condition=rule.condition or llm.condition,
         full_set=rule.full_set if rule.full_set is not None else llm.full_set,
         year=rule.year or llm.year,
+        dial_color=rule.dial_color or llm.dial_color,
+        dial_variant=rule.dial_variant or llm.dial_variant,
+        bezel_color=rule.bezel_color or llm.bezel_color,
+        case_material=rule.case_material or llm.case_material,
+        bracelet_type=rule.bracelet_type or llm.bracelet_type,
+        visual_confidence=rule.visual_confidence if rule.visual_confidence is not None else llm.visual_confidence,
         price=rule.price or llm.price,
         currency=rule.currency or llm.currency,
         negotiable=rule.negotiable if rule.negotiable is not None else llm.negotiable,

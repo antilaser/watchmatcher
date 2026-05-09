@@ -65,6 +65,22 @@ function inferMessageType(msg: WAMessage): string {
   return "text";
 }
 
+function quotedMessageMetadata(msg: WAMessage): Record<string, string> {
+  const m = msg.message;
+  const contextInfo =
+    m?.extendedTextMessage?.contextInfo ??
+    m?.imageMessage?.contextInfo ??
+    m?.videoMessage?.contextInfo ??
+    m?.documentMessage?.contextInfo;
+  const quotedId = contextInfo?.stanzaId;
+  if (!quotedId) return {};
+  return {
+    quoted_message_id: quotedId,
+    ...(contextInfo?.participant ? { quoted_participant: contextInfo.participant } : {}),
+    ...(contextInfo?.remoteJid ? { quoted_remote_jid: contextInfo.remoteJid } : {}),
+  };
+}
+
 async function start(): Promise<void> {
   if (currentSocket) {
     try {
@@ -165,6 +181,13 @@ async function start(): Promise<void> {
           groupName = meta.subject;
           groupNameCache.set(remoteJid, groupName);
           inviteCode = meta.inviteCode;
+          if (!inviteCode) {
+            try {
+              inviteCode = await sock.groupInviteCode(remoteJid);
+            } catch {
+              // Some groups/accounts may not allow invite-code lookup.
+            }
+          }
           groupInviteCache.set(remoteJid, inviteCode);
         } catch {
           // metadata fetch can rate-limit; ignore and forward without name
@@ -184,6 +207,7 @@ async function start(): Promise<void> {
         original_timestamp: new Date(tsSec * 1000).toISOString(),
         metadata: {
           fromMe: m.key.fromMe ?? false,
+          ...quotedMessageMetadata(m),
           ...(doc?.mimetype ? { document_mimetype: doc.mimetype } : {}),
           ...(isImageDocument ? { image_sent_as_document: true } : {}),
         },

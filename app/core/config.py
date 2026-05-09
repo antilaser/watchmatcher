@@ -50,13 +50,16 @@ class Settings(BaseSettings):
     vision_max_image_bytes: int = 8_000_000
     media_storage_dir: str = "media"
     listing_image_max_bytes: int = 5_000_000
-    listing_image_retention_days: int = 7
+    listing_image_retention_days: int = 14
     llm_enabled: bool = True
     llm_fallback_enabled: bool = True
 
     telegram_bot_token: str = ""
     telegram_default_chat_id: str = ""
     telegram_enabled: bool = False
+    # Used for Telegram webhook requests via X-Telegram-Bot-Api-Secret-Token.
+    # Falls back to WEBHOOK_HMAC_SECRET when left empty.
+    telegram_webhook_secret: str = ""
 
     default_workspace_name: str = "default"
     default_min_match_confidence: float = 0.75
@@ -66,7 +69,7 @@ class Settings(BaseSettings):
     # When buy/sell share the same reference string, bump score so manual-review queues stay usable.
     exact_reference_match_score_floor: float = Field(default=0.86, ge=0.0, le=1.0)
     # Only pair offers/requests whose source WhatsApp message is at most this old (by original_timestamp).
-    match_candidate_max_age_days: int = Field(default=7, ge=1, le=365)
+    match_candidate_max_age_days: int = Field(default=3, ge=1, le=365)
     # Profit display: AUTO = same ISO as both legs when they match, else USD. Set EUR/USD/… to force XE conversion into that currency.
     profit_reporting_currency: str = Field(default="AUTO")
     # Xe Currency Data API (https://xecdapi.xe.com) — Basic auth: account id + api key from https://currencydata.xe.com/
@@ -81,8 +84,8 @@ class Settings(BaseSettings):
     alert_dedupe_hours: int = 24
     expire_offer_days: int = 30
     expire_request_days: int = 60
-    listing_retention_days: int = 7
-    message_retention_days: int = 7
+    listing_retention_days: int = 14
+    message_retention_days: int = 14
 
     @field_validator("api_cors_origins")
     @classmethod

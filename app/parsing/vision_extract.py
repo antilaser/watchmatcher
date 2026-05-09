@@ -19,12 +19,20 @@ Extract anything that helps match buy/sell listings:
 - Any price and currency visible (£, $, €, CHF, USD, GBP, EUR, k for thousands)
 - Condition hints (unworn, full set, etc.)
 - Manufacturing or warranty-card year: a 4-digit year like 2019 or 2022 on the card is a YEAR, not a model reference. DD.MM.YYYY dates on papers are years/dates, not refs.
+- Visual matching attributes if visible: dial base color, named dial variant/pattern, bezel color, case material/color, bracelet type. Be conservative; use NONE if not visible.
+- Always include DIAL_COLOR and DIAL_VARIANT lines. If a watch picture clearly shows a dial, do not hide the color/variant only inside NOTES.
 
 Reply with plain text lines only, no markdown. Start each line with a label:
 REF: (space-separated candidate references, or NONE)
 YEAR: (single 4-digit year from card/tag if visible, or NONE)
 BRAND: (or NONE)
 PRICE: (or NONE)
+DIAL_COLOR: (base color: black, white, silver, blue, green, red, brown, grey, champagne, gold, rose gold, pink, lavender, or NONE)
+DIAL_VARIANT: (named dial variant/pattern: azzurro, palm, wimbledon, sundust, rhodium, slate, tiffany, ice blue, panda, motif, roman, baton, or NONE)
+BEZEL_COLOR: (black, green, blue/black, red/blue, brown/black, ceramic color, or NONE)
+CASE_MATERIAL: (steel, yellow gold, rose gold, white gold, platinum, titanium, ceramic, two-tone, or NONE)
+BRACELET_TYPE: (oyster, jubilee, president, rubber, leather, or NONE)
+VISUAL_CONFIDENCE: (0.0-1.0 for color/material guesses, or NONE)
 NOTES: short free text or NONE
 If unreadable, still reply with REF: NONE etc."""
 

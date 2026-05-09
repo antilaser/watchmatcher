@@ -9,12 +9,12 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.alerts.formatter import append_original_messages_to_summary, format_match_summary
-from app.alerts.telegram import TelegramClient, build_match_inline_keyboard
+from app.alerts.telegram import TelegramClient, stored_message_photo_path
 from app.core.config import get_settings
 from app.core.enums import AlertChannel, AlertStatus, AlertType
 from app.core.logging import get_logger
 from app.matching.calibration import effective_unpriced_alert_min
-from app.models import Alert, BuyRequest, Match, RawMessage, SellOffer, Workspace
+from app.models import Alert, BuyRequest, Group, Match, RawMessage, SellOffer, Workspace
 
 log = get_logger(__name__)
 
@@ -67,6 +67,8 @@ class AlertService:
 
         sell_rm = await self.session.get(RawMessage, offer.raw_message_id)
         buy_rm = await self.session.get(RawMessage, request.raw_message_id)
+        sell_group = await self.session.get(Group, sell_rm.group_id) if sell_rm else None
+        buy_group = await self.session.get(Group, buy_rm.group_id) if buy_rm else None
         seller_message_text = (sell_rm.text_body or "").strip() if sell_rm else None
         buyer_message_text = (buy_rm.text_body or "").strip() if buy_rm else None
         if not seller_message_text:
@@ -75,7 +77,15 @@ class AlertService:
             buyer_message_text = None
 
         telegram_text = append_original_messages_to_summary(
-            headline, seller_message_text, buyer_message_text
+            "REGULAR MATCH ALERT\n" + headline,
+            seller_message_text,
+            buyer_message_text,
+            seller_name=sell_rm.sender_name if sell_rm else None,
+            seller_group=sell_group.group_name if sell_group else None,
+            seller_time=sell_rm.original_timestamp if sell_rm else None,
+            buyer_name=buy_rm.sender_name if buy_rm else None,
+            buyer_group=buy_group.group_name if buy_group else None,
+            buyer_time=buy_rm.original_timestamp if buy_rm else None,
         )
 
         alert = Alert(
@@ -87,6 +97,8 @@ class AlertService:
                 "summary": headline,
                 "seller_message_text": seller_message_text,
                 "buyer_message_text": buyer_message_text,
+                "seller_message_at": sell_rm.original_timestamp.isoformat() if sell_rm else None,
+                "buyer_message_at": buy_rm.original_timestamp.isoformat() if buy_rm else None,
                 "match_id": str(match.id),
                 "match_type": match.match_type.value,
                 "match_confidence": float(match.match_confidence),
@@ -96,6 +108,23 @@ class AlertService:
                 "seller_price": str(offer.asking_price) if offer.asking_price else None,
                 "buyer_price": str(request.target_price) if request.target_price else None,
                 "currency": offer.currency or request.currency,
+                "visual_attributes": {
+                    "seller": {
+                        "dial_color": offer.dial_color,
+                        "dial_variant": offer.dial_variant,
+                        "bezel_color": offer.bezel_color,
+                        "case_material": offer.case_material,
+                        "bracelet_type": offer.bracelet_type,
+                    },
+                    "buyer": {
+                        "dial_color": request.dial_color,
+                        "dial_variant": request.dial_variant,
+                        "bezel_color": request.bezel_color,
+                        "case_material": request.case_material,
+                        "bracelet_type": request.bracelet_type,
+                    },
+                    "score_adjustment": (match.reasoning_json or {}).get("visual_score_adjustment"),
+                },
             },
             status=AlertStatus.PENDING,
         )
@@ -106,9 +135,22 @@ class AlertService:
             sent = await self._telegram.send_message(
                 chat_id=self._settings.telegram_default_chat_id,
                 text=telegram_text,
-                reply_markup=build_match_inline_keyboard(str(match.id)),
             )
             if sent:
+                sell_photo = stored_message_photo_path(sell_rm.metadata_json if sell_rm else None)
+                buy_photo = stored_message_photo_path(buy_rm.metadata_json if buy_rm else None)
+                if sell_photo:
+                    await self._telegram.send_photo(
+                        chat_id=self._settings.telegram_default_chat_id,
+                        photo_path=sell_photo,
+                        caption="Seller picture",
+                    )
+                if buy_photo and buy_photo != sell_photo:
+                    await self._telegram.send_photo(
+                        chat_id=self._settings.telegram_default_chat_id,
+                        photo_path=buy_photo,
+                        caption="Buyer picture",
+                    )
                 alert.channel = AlertChannel.TELEGRAM
                 alert.status = AlertStatus.SENT
                 alert.sent_at = datetime.now(timezone.utc)

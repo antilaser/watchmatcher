@@ -50,6 +50,15 @@
       color: var(--muted);
       max-width: 42rem;
     }
+    .topbar-title { display: flex; flex-direction: column; gap: 0.35rem; }
+    .topbar-actions { display: flex; align-items: center; gap: 0.75rem; flex-wrap: wrap; }
+    .menu-toggle {
+      display: none;
+      background: var(--bg-soft);
+      color: var(--text);
+      border-color: var(--border);
+    }
+    nav { display: flex; gap: 0.5rem; flex-wrap: wrap; }
     main { padding: 1rem clamp(0.75rem, 3vw, 2rem) 2rem; }
     .toolbar { display: flex; gap: 0.5rem; flex-wrap: wrap; margin-bottom: 1rem; }
     button, .btn {
@@ -74,6 +83,34 @@
       border-radius: 16px;
       padding: 1rem 1.1rem;
       box-shadow: var(--shadow);
+    }
+    article.search-alarm {
+      border-color: rgba(62, 207, 142, 0.65);
+      background:
+        linear-gradient(180deg, rgba(23, 53, 43, 0.96), rgba(18, 39, 36, 0.96));
+    }
+    .type-badge {
+      display: inline-flex;
+      align-items: center;
+      border: 1px solid var(--border);
+      border-radius: 999px;
+      padding: 0.16rem 0.48rem;
+      margin-left: 0.25rem;
+      font-size: 0.7rem;
+      font-weight: 800;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      color: var(--muted);
+    }
+    .type-badge.search {
+      border-color: rgba(62, 207, 142, 0.7);
+      color: var(--ok);
+      background: rgba(62, 207, 142, 0.1);
+    }
+    .type-badge.match {
+      border-color: rgba(79, 156, 255, 0.65);
+      color: var(--accent-strong);
+      background: rgba(79, 156, 255, 0.1);
     }
     .meta { font-size: 0.8rem; color: var(--muted); margin-bottom: 0.5rem; }
     pre.summary {
@@ -101,12 +138,28 @@
       text-transform: uppercase;
       letter-spacing: 0.06em;
     }
+    .original-time {
+      margin: -0.2rem 0 0.45rem;
+      color: var(--accent-strong);
+      font-size: 0.82rem;
+      font-weight: 700;
+    }
     .original-box pre {
       margin: 0;
       white-space: pre-wrap;
       word-break: break-word;
       font: inherit;
       font-size: 0.86rem;
+    }
+    .alert-image {
+      display: block;
+      width: 100%;
+      max-height: 18rem;
+      object-fit: contain;
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      background: rgba(0, 0, 0, 0.2);
+      margin: 0.5rem 0;
     }
     .links { display: flex; flex-wrap: wrap; gap: 0.5rem; margin-top: 0.5rem; }
     .links a {
@@ -137,6 +190,7 @@
       }
       header > div,
       header button,
+      .topbar-actions,
       nav,
       nav a,
       .toolbar,
@@ -145,6 +199,21 @@
       .actions button,
       .links a {
         width: 100%;
+      }
+      .topbar-actions {
+        align-items: stretch;
+        flex-direction: column;
+      }
+      .menu-toggle {
+        display: block;
+        width: 100%;
+      }
+      nav {
+        display: none !important;
+        flex-direction: column;
+      }
+      nav.open {
+        display: flex !important;
       }
       header button,
       nav a,
@@ -166,11 +235,7 @@
 </head>
 <body>
   <header>
-    <div>
-      <nav style="display:flex;gap:0.5rem;margin-bottom:0.5rem;flex-wrap:wrap;">
-        <a href="/dashboard" class="btn" style="text-decoration:none;display:inline-block;">Alerts</a>
-        <a href="/listings" class="btn" style="text-decoration:none;display:inline-block;">Sell listings</a>
-      </nav>
+    <div class="topbar-title">
       <h1>watchmatch — alerts</h1>
       <p class="note">
         Match alerts: profit above the threshold, or no price but enough confidence
@@ -178,23 +243,34 @@
         Below: feedback stats and automatic threshold calibration for the workspace.
       </p>
     </div>
-    <button type="button" class="primary" id="btn-refresh">Refresh</button>
+    <div class="topbar-actions">
+      <button type="button" class="menu-toggle" id="menu-toggle">Menu</button>
+      <nav id="main-nav" aria-label="Primary navigation">
+        <a href="/dashboard" class="btn" style="text-decoration:none;display:inline-block;">Alerts</a>
+        <a href="/listings" class="btn" style="text-decoration:none;display:inline-block;">Listings</a>
+        <a href="/alarms" class="btn" style="text-decoration:none;display:inline-block;">Alarms</a>
+      </nav>
+      <button type="button" class="primary" id="btn-refresh">Refresh</button>
+    </div>
   </header>
   <main>
     <div class="toolbar">
       <label class="note" style="display:flex;align-items:center;gap:0.35rem;">
-        Status
-        <select id="filter-status" style="background:var(--card);color:var(--text);border:1px solid var(--border);border-radius:6px;padding:0.35rem;">
-          <option value="">All</option>
-          <option value="PENDING">PENDING</option>
-          <option value="SENT">SENT</option>
-          <option value="ACKNOWLEDGED">ACKNOWLEDGED</option>
-          <option value="FAILED">FAILED</option>
+        View
+        <select id="filter-review" style="background:var(--card);color:var(--text);border:1px solid var(--border);border-radius:6px;padding:0.35rem;">
+          <option value="active" selected>Active / needs review</option>
+          <option value="">All alerts</option>
+          <option value="reviewed">Acknowledged</option>
+          <option value="errors">Delivery errors</option>
         </select>
       </label>
       <label class="note" style="display:flex;align-items:center;gap:0.35rem;">
         <input type="checkbox" id="hide-bad" />
         Hide pairs marked incorrect
+      </label>
+      <label class="note" style="display:flex;align-items:center;gap:0.35rem;">
+        <input type="checkbox" id="show-inactive-matches" />
+        Show expired / rejected matches
       </label>
     </div>
     <section
@@ -208,10 +284,11 @@
       </p>
       <div style="display:flex;gap:0.5rem;flex-wrap:wrap;align-items:center;margin-bottom:0.5rem;">
         <label class="note" style="display:flex;align-items:center;gap:0.35rem;">
-          Only match listings newer than (days), by WhatsApp message time
+          Match search horizon (days). Telegram: /horizon 14
           <input type="number" id="match-max-age-days" min="1" max="365" value="7" style="width:4.5rem;background:var(--card);color:var(--text);border:1px solid var(--border);border-radius:6px;padding:0.35rem;" />
         </label>
         <button type="button" id="btn-match-age-save">Save horizon</button>
+        <span class="note" id="match-max-age-status"></span>
       </div>
       <div style="display:flex;gap:0.5rem;flex-wrap:wrap;margin-bottom:0.5rem;">
         <button type="button" id="btn-cal-stats">Load stats</button>
@@ -248,17 +325,54 @@
       el.className = cls || "";
     }
 
-    function waWeb() {
-      return "https://web.whatsapp.com/";
+    function isMobileDevice() {
+      return /Android|iPhone|iPad|iPod/i.test(navigator.userAgent || "");
+    }
+
+    function inviteCodeFromUrl(url) {
+      try {
+        const parsed = new URL(url);
+        const parts = parsed.pathname.split("/").filter(Boolean);
+        return parts[parts.length - 1] || "";
+      } catch {
+        const parts = String(url || "").split("/").filter(Boolean);
+        return parts[parts.length - 1] || "";
+      }
+    }
+
+    function openWhatsAppGroup(url) {
+      if (!isMobileDevice()) {
+        window.open(url, "_blank", "noopener");
+        return;
+      }
+      const code = inviteCodeFromUrl(url);
+      if (!code) {
+        window.location.href = url;
+        return;
+      }
+      window.location.href = "whatsapp://chat?code=" + encodeURIComponent(code);
     }
 
     function groupLinks(g, label) {
       if (!g) return "";
       const parts = [];
       if (g.invite_url) {
-        parts.push(`<a href="${encodeURI(g.invite_url)}" target="_blank" rel="noopener">${label}: open group (invite)</a>`);
+        const code = inviteCodeFromUrl(g.invite_url);
+        const href = isMobileDevice() && code
+          ? "whatsapp://chat?code=" + encodeURIComponent(code)
+          : g.invite_url;
+        const text = isMobileDevice()
+          ? `${label}: open group in WhatsApp`
+          : `${label}: open group invite`;
+        parts.push(`<a href="${escapeHtml(href)}" data-open-whatsapp-group="${escapeHtml(g.invite_url)}" rel="noopener">${text}</a>`);
+      } else {
+        parts.push(`<span class="note" style="display:inline-block;">${label}: no direct group link available yet</span>`);
       }
-      parts.push(`<a href="${waWeb()}" target="_blank" rel="noopener">${label}: WhatsApp Web</a>`);
+      if (isMobileDevice()) {
+        parts.push(`<a href="whatsapp://" rel="noopener">${label}: open WhatsApp app</a>`);
+      } else {
+        parts.push(`<a href="https://web.whatsapp.com/" target="_blank" rel="noopener">${label}: open WhatsApp Web</a>`);
+      }
       parts.push(`<span class="note" style="display:inline-block;margin-left:0.25rem;">${label}: ${escapeHtml(g.group_name)}</span>`);
       return `<div class="links">${parts.join("")}</div>`;
     }
@@ -271,37 +385,90 @@
         .replace(/"/g, "&quot;");
     }
 
+    function setMatchHorizonStatus(days, prefix = "Current") {
+      document.getElementById("match-max-age-status").textContent = `${prefix}: ${days} days`;
+    }
+
+    function formatMessageTime(value) {
+      return value ? new Date(value).toLocaleString() : "Unknown message time";
+    }
+
+    function formatMessageAge(value) {
+      if (!value) return "";
+      const ts = new Date(value).getTime();
+      if (Number.isNaN(ts)) return "";
+      const minutes = Math.max(0, Math.round((Date.now() - ts) / 60000));
+      if (minutes < 60) return ` · ${minutes} min ago`;
+      const hours = Math.round(minutes / 60);
+      if (hours < 48) return ` · ${hours}h ago`;
+      return ` · ${Math.round(hours / 24)}d ago`;
+    }
+
     function renderItem(a) {
       const summary = (a.payload_json && a.payload_json.summary) ? a.payload_json.summary : JSON.stringify(a.payload_json, null, 2);
+      const isSearchAlarm = a.alert_type === "SEARCH_ALARM_MATCH";
+      const typeBadge = isSearchAlarm
+        ? `<span class="type-badge search">Search alarm</span>`
+        : `<span class="type-badge match">Regular match</span>`;
       const sellerMsg = a.seller_message_text || (a.payload_json && a.payload_json.seller_message_text) || "";
       const buyerMsg = a.buyer_message_text || (a.payload_json && a.payload_json.buyer_message_text) || "";
-      const originals = (sellerMsg || buyerMsg) ? `
+      const sellerImage = a.seller_image_url
+        ? `<a href="${escapeHtml(a.seller_image_url)}" target="_blank" rel="noopener"><img class="alert-image" src="${escapeHtml(a.seller_image_url)}" alt="Seller listing picture" loading="lazy" /></a>`
+        : "";
+      const buyerImage = a.buyer_image_url
+        ? `<a href="${escapeHtml(a.buyer_image_url)}" target="_blank" rel="noopener"><img class="alert-image" src="${escapeHtml(a.buyer_image_url)}" alt="Buyer listing picture" loading="lazy" /></a>`
+        : "";
+      const sellerMessageAt = a.seller_message_at || (a.payload_json && a.payload_json.seller_message_at);
+      const buyerMessageAt = a.buyer_message_at || (a.payload_json && a.payload_json.buyer_message_at);
+      const sellerTime = formatMessageTime(sellerMessageAt);
+      const buyerTime = formatMessageTime(buyerMessageAt);
+      const sellerAge = formatMessageAge(sellerMessageAt);
+      const buyerAge = formatMessageAge(buyerMessageAt);
+      const alarmId = a.payload_json && a.payload_json.search_alarm_id;
+      const alarmLink = isSearchAlarm && alarmId
+        ? `<div class="links"><a href="/alarms?alarm=${encodeURIComponent(alarmId)}">Open associated search alarm</a></div>`
+        : "";
+      const originals = (sellerMsg || buyerMsg || sellerImage || buyerImage) ? `
           <div class="originals">
-            ${sellerMsg ? `<div class="original-box"><h3>Seller original message</h3><pre>${escapeHtml(sellerMsg)}</pre></div>` : ""}
-            ${buyerMsg ? `<div class="original-box"><h3>Buyer original message</h3><pre>${escapeHtml(buyerMsg)}</pre></div>` : ""}
+            ${(sellerMsg || sellerImage) ? `<div class="original-box"><h3>Seller original message</h3><div class="original-time">Posted: ${escapeHtml(sellerTime + sellerAge)}</div>${sellerImage}${sellerMsg ? `<pre>${escapeHtml(sellerMsg)}</pre>` : ""}</div>` : ""}
+            ${(buyerMsg || buyerImage) ? `<div class="original-box"><h3>Buyer original message</h3><div class="original-time">Posted: ${escapeHtml(buyerTime + buyerAge)}</div>${buyerImage}${buyerMsg ? `<pre>${escapeHtml(buyerMsg)}</pre>` : ""}</div>` : ""}
           </div>` : "";
       const sg = groupLinks(a.sell_group, "Seller (group)");
       const bg = groupLinks(a.buy_group, "Buyer (group)");
       const mid = a.match_id || "";
-      const fb = a.match_human_feedback ? ` · label: <strong>${escapeHtml(a.match_human_feedback)}</strong>` : "";
+      const fbNote = a.match_human_feedback_note ? ` (${escapeHtml(a.match_human_feedback_note)})` : "";
+      const fb = a.match_human_feedback ? ` <span data-feedback-label>· label: <strong>${escapeHtml(a.match_human_feedback)}</strong>${fbNote}</span>` : "";
+      const matchStatus = a.match_status ? ` · match: <strong>${escapeHtml(a.match_status)}</strong>` : "";
       const fbBtns = mid ? `
             <button type="button" data-act="fb-good" data-mid="${mid}">Pair correct</button>
+            <select data-feedback-reason="${mid}" aria-label="Incorrect reason" style="background:var(--card);color:var(--text);border:1px solid var(--border);border-radius:10px;padding:0.65rem;">
+              <option value="">Reason if incorrect...</option>
+              <option value="dial/color mismatch">Dial / color mismatch</option>
+              <option value="wrong buy/sell interpretation">Wrong buy/sell interpretation</option>
+              <option value="wrong reference/model">Wrong reference / model</option>
+              <option value="wrong size">Wrong size</option>
+              <option value="price/currency issue">Price / currency issue</option>
+              <option value="year/condition mismatch">Year / condition mismatch</option>
+              <option value="sold/not available">Sold / not available</option>
+              <option value="other">Other</option>
+            </select>
             <button type="button" data-act="fb-bad" data-mid="${mid}">Pair incorrect</button>` : "";
       return `
-        <article data-id="${a.id}">
+        <article data-id="${a.id}" class="${isSearchAlarm ? "search-alarm" : ""}">
           <div class="meta">
             <span class="status ${a.status}">${a.status}</span>
+            ${typeBadge}
             · ${a.alert_type} · ${a.channel}
-            · ${new Date(a.created_at).toLocaleString()}${fb}
+            · ${new Date(a.created_at).toLocaleString()}${matchStatus}${fb}
           </div>
-          <pre class="summary">${escapeHtml(summary)}</pre>
+          ${alarmLink}
           ${originals}
+          <pre class="summary">${escapeHtml(summary)}</pre>
           ${sg}
           ${bg}
           <div class="actions">
             ${fbBtns}
             <button type="button" data-act="ack">Acknowledge</button>
-            <button type="button" data-act="snooze">Snooze 1h</button>
             <button type="button" class="danger" data-act="del">Delete</button>
           </div>
         </article>`;
@@ -309,11 +476,13 @@
 
     async function load() {
       setMsg("Loading…", "");
-      const st = document.getElementById("filter-status").value;
+      const reviewFilter = document.getElementById("filter-review").value;
       const hideBad = document.getElementById("hide-bad").checked;
+      const showInactiveMatches = document.getElementById("show-inactive-matches").checked;
       let q = "?limit=100";
-      if (st) q += "&status=" + encodeURIComponent(st);
+      if (reviewFilter) q += "&review_filter=" + encodeURIComponent(reviewFilter);
       if (hideBad) q += "&hide_human_bad=true";
+      if (!showInactiveMatches) q += "&hide_inactive_matches=true";
       let res;
       try {
         res = await fetch(API + "/alerts" + q, { credentials: "same-origin" });
@@ -332,21 +501,31 @@
         : "<p class=\"note\">No alerts yet. Matches appear after messages are processed and pass profit / confidence thresholds.</p>";
       setMsg("Total: " + (data.total ?? 0), "ok");
 
-      list.querySelectorAll("article").forEach((art) => {
-        art.querySelectorAll("button[data-act]").forEach((btn) => {
-          btn.addEventListener("click", () => onAction(art.dataset.id, btn.dataset.act, btn));
-        });
-      });
     }
 
-    async function submitMatchFeedback(matchId, verdict) {
+    async function submitMatchFeedback(matchId, verdict, note = "") {
       const r = await fetch(API + "/matches/" + matchId + "/feedback", {
         method: "POST",
         credentials: "same-origin",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ verdict }),
+        body: JSON.stringify({ verdict, note: note || null }),
       });
       if (!r.ok) throw new Error(await r.text());
+    }
+
+    function setArticleFeedback(art, verdict, note = "") {
+      const meta = art.querySelector(".meta");
+      if (!meta) return;
+      const label = `label: <strong>${escapeHtml(verdict)}</strong>${note ? ` (${escapeHtml(note)})` : ""}`;
+      const existing = meta.querySelector("[data-feedback-label]");
+      if (existing) {
+        existing.innerHTML = label;
+      } else {
+        meta.insertAdjacentHTML("beforeend", ` <span data-feedback-label>· ${label}</span>`);
+      }
+      art.querySelectorAll("[data-act='fb-good'], [data-act='fb-bad']").forEach((button) => {
+        button.classList.toggle("primary", button.dataset.act === (verdict === "GOOD" ? "fb-good" : "fb-bad"));
+      });
     }
 
     async function onAction(id, act, btn) {
@@ -355,20 +534,21 @@
         if (act === "fb-good" || act === "fb-bad") {
           const mid = btn.getAttribute("data-mid");
           if (!mid) return;
-          await submitMatchFeedback(mid, act === "fb-good" ? "GOOD" : "BAD");
-          await load();
+          const verdict = act === "fb-good" ? "GOOD" : "BAD";
+          let note = "";
+          if (verdict === "BAD") {
+            const reason = Array.from(document.querySelectorAll("[data-feedback-reason]"))
+              .find((el) => el.dataset.feedbackReason === mid);
+            note = reason ? reason.value : "";
+          }
+          await submitMatchFeedback(mid, verdict, note);
+          const art = btn.closest("article");
+          if (art) setArticleFeedback(art, verdict, note);
+          setMsg("Pair marked " + (verdict === "GOOD" ? "correct." : "incorrect" + (note ? " (" + note + ")" : "") + "."), "ok");
           return;
         }
         if (act === "ack") {
           const r = await fetch(API + "/alerts/" + id + "/acknowledge", { method: "POST", credentials: "same-origin" });
-          if (!r.ok) throw new Error(await r.text());
-        } else if (act === "snooze") {
-          const r = await fetch(API + "/alerts/" + id + "/snooze", {
-            method: "POST",
-            credentials: "same-origin",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ minutes: 60 }),
-          });
           if (!r.ok) throw new Error(await r.text());
         } else if (act === "del") {
           if (!confirm("Delete this alert permanently?")) { btn.disabled = false; return; }
@@ -383,9 +563,26 @@
       }
     }
 
+    document.getElementById("list").addEventListener("click", (event) => {
+      const groupLink = event.target.closest("[data-open-whatsapp-group]");
+      if (groupLink) {
+        event.preventDefault();
+        openWhatsAppGroup(groupLink.dataset.openWhatsappGroup);
+        return;
+      }
+      const btn = event.target.closest("button[data-act]");
+      if (!btn) return;
+      const art = btn.closest("article");
+      if (!art) return;
+      onAction(art.dataset.id, btn.dataset.act, btn);
+    });
     document.getElementById("btn-refresh").addEventListener("click", load);
-    document.getElementById("filter-status").addEventListener("change", load);
+    document.getElementById("menu-toggle").addEventListener("click", () => {
+      document.getElementById("main-nav").classList.toggle("open");
+    });
+    document.getElementById("filter-review").addEventListener("change", load);
     document.getElementById("hide-bad").addEventListener("change", load);
+    document.getElementById("show-inactive-matches").addEventListener("change", load);
 
     async function loadCalStats() {
       const pre = document.getElementById("cal-pre");
@@ -396,14 +593,60 @@
         });
         if (!r.ok) throw new Error(await r.text());
         const d = await r.json();
-        pre.textContent = JSON.stringify(d, null, 2);
+        pre.textContent = renderCalibrationStats(d);
         const cur = (d.current_calibration && d.current_calibration.match_candidate_max_age_days) ?? 7;
         document.getElementById("match-max-age-days").value = String(cur);
+        setMatchHorizonStatus(cur);
         setMsg("Calibration stats updated.", "ok");
       } catch (e) {
         pre.textContent = "";
         setMsg(String(e), "error");
       }
+    }
+
+    function renderCalibrationStats(d) {
+      const counts = d.counts || {};
+      const good = counts.GOOD || 0;
+      const bad = counts.BAD || 0;
+      const total = good + bad;
+      const priced = d.priced_breakdown || {};
+      const byType = d.by_match_type || {};
+      const sug = d.suggested_calibration || {};
+      const cur = d.current_calibration || {};
+      const lines = [
+        `Feedback labels in last ${d.since_days || 30} days`,
+        `Total labels: ${total}`,
+        `Correct pairs: ${good}`,
+        `Incorrect pairs: ${bad}`,
+        "",
+        "Incorrect breakdown:",
+        `Unpriced matches: ${priced.BAD_unpriced || 0}`,
+        `Priced matches: ${priced.BAD_priced || 0}`,
+        "",
+        "By match type:",
+      ];
+      const typeNames = Object.keys(byType);
+      if (typeNames.length) {
+        typeNames.forEach((name) => {
+          const row = byType[name] || {};
+          lines.push(`${name}: GOOD ${row.GOOD || 0}, BAD ${row.BAD || 0}`);
+        });
+      } else {
+        lines.push("No labeled pairs yet.");
+      }
+      lines.push("", "Current settings:");
+      lines.push(`Match horizon: ${cur.match_candidate_max_age_days || "global default"} days`);
+      lines.push(`Unpriced confidence threshold: ${cur.unpriced_alert_min_match_confidence || "global default"}`);
+      lines.push(`Exact-reference floor: ${cur.exact_reference_match_score_floor || "global default"}`);
+      lines.push("", "Suggestion:");
+      if (sug.unpriced_alert_min_match_confidence == null && sug.exact_reference_match_score_floor == null) {
+        lines.push(sug.rationale || "Not enough labels to suggest a threshold change yet.");
+      } else {
+        lines.push(`Unpriced confidence threshold: ${sug.unpriced_alert_min_match_confidence ?? "unchanged"}`);
+        lines.push(`Exact-reference floor: ${sug.exact_reference_match_score_floor ?? "unchanged"}`);
+        if (sug.rationale) lines.push(sug.rationale);
+      }
+      return lines.join("\n");
     }
 
     async function applyCalSuggestion() {
@@ -474,8 +717,11 @@
           });
         }
         if (!r.ok) throw new Error(await r.text());
+        const d = await r.json();
+        const saved = (d.match_calibration && d.match_calibration.match_candidate_max_age_days) || n;
+        document.getElementById("match-max-age-days").value = String(saved);
+        setMatchHorizonStatus(saved, "Saved");
         setMsg("Match horizon saved: " + n + " days.", "ok");
-        await loadCalStats();
       } catch (e) {
         setMsg(String(e), "error");
       }

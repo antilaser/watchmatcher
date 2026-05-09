@@ -24,6 +24,7 @@ from app.api.v1.routes import (
     review,
     search_alarms,
     sources,
+    telegram,
     workspace,
 )
 from app.core.config import get_settings
@@ -71,12 +72,14 @@ def create_app() -> FastAPI:
     app.include_router(search_alarms.router, prefix=prefix, dependencies=dashboard_auth)
     app.include_router(review.router, prefix=prefix, dependencies=dashboard_auth)
     app.include_router(ingest.router, prefix=prefix)
+    app.include_router(telegram.router, prefix=prefix)
     app.include_router(workspace.router, prefix=prefix, dependencies=dashboard_auth)
     app.include_router(listings.router, prefix=prefix, dependencies=dashboard_auth)
 
     ui_dir = Path(__file__).resolve().parent / "ui"
     ui_index = ui_dir / "index.html"
     ui_listings = ui_dir / "listings.html"
+    ui_alarms = ui_dir / "alarms.html"
 
     @app.get("/dashboard", dependencies=dashboard_auth)
     async def dashboard_page() -> FileResponse:
@@ -89,6 +92,12 @@ def create_app() -> FastAPI:
         if not ui_listings.is_file():
             raise HTTPException(status_code=404, detail="listings UI not found")
         return FileResponse(ui_listings, media_type="text/html; charset=utf-8")
+
+    @app.get("/alarms", dependencies=dashboard_auth)
+    async def alarms_page() -> FileResponse:
+        if not ui_alarms.is_file():
+            raise HTTPException(status_code=404, detail="alarms UI not found")
+        return FileResponse(ui_alarms, media_type="text/html; charset=utf-8")
 
     return app
 

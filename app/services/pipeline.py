@@ -21,11 +21,12 @@ from app.core.enums import (
 from app.core.logging import get_logger
 from app.ingestion.media_redis import pop_pending_image
 from app.matching.service import MatchingService
-from app.models import BuyRequest, Group, ParsedMessage, RawMessage, SellOffer
+from app.models import BuyRequest, Group, ParsedMessage, RawMessage, SearchAlarm, SellOffer
 from app.normalization.service import NormalizationService
 from app.parsing.service import ParsingService
 from app.parsing.vision_extract import extract_watch_text_from_image
 from app.schemas.parsing import ExtractedWatchTrade, ParseResult
+from app.services.sold_marker import close_quoted_sold_offer
 
 log = get_logger(__name__)
 
@@ -44,6 +45,55 @@ def _parse_has_image(raw: RawMessage) -> bool:
     return False
 
 
+def _has_attr(value: str | None) -> bool:
+    return bool(value and value.strip())
+
+
+def _caption_has_enough_match_data(parse_result: ParseResult) -> bool:
+    extracted = parse_result.extracted
+    cls = parse_result.classification.classification
+    if cls == MessageClassification.OTHER:
+        return False
+    if not _has_attr(extracted.reference):
+        return False
+    # Reference is the strongest match key. Require one extra useful field so a
+    # bare number in a caption can still ask vision to confirm context.
+    return any(
+        (
+            _has_attr(extracted.brand),
+            extracted.price is not None and extracted.price > 0,
+            _has_attr(extracted.dial_color),
+            _has_attr(extracted.dial_variant),
+            _has_attr(extracted.bezel_color),
+            _has_attr(extracted.case_material),
+        )
+    )
+
+
+def _caption_missing_image_visual_attrs(parse_result: ParseResult) -> bool:
+    """Image-backed watch posts need vision when text lacks dial details."""
+    extracted = parse_result.extracted
+    cls = parse_result.classification.classification
+    if cls == MessageClassification.OTHER:
+        return True
+    if not (_has_attr(extracted.reference) or _has_attr(extracted.brand)):
+        return False
+    return not (_has_attr(extracted.dial_color) or _has_attr(extracted.dial_variant))
+
+
+def _alarm_visual_fields(alarm: SearchAlarm) -> tuple[str, ...]:
+    fields = []
+    if alarm.dial_color:
+        fields.append("dial_color")
+    if alarm.bezel_color:
+        fields.append("bezel_color")
+    if alarm.case_material:
+        fields.append("case_material")
+    if alarm.bracelet_type:
+        fields.append("bracelet_type")
+    return tuple(fields)
+
+
 class PipelineService:
     def __init__(
         self,
@@ -60,6 +110,32 @@ class PipelineService:
         self.matching = matching or MatchingService(session)
         self.alerts = alerts or AlertService(session)
         self.search_alarms = search_alarms or SearchAlarmService(session)
+
+    async def _caption_missing_visual_for_active_alarm(self, parse_result: ParseResult, workspace_id: UUID) -> bool:
+        extracted = parse_result.extracted
+        cls = parse_result.classification.classification
+        if cls == MessageClassification.OTHER:
+            return True
+        target_type = "SELL" if cls == MessageClassification.SELL_OFFER else "BUY"
+        alarms = (
+            await self.session.execute(
+                select(SearchAlarm)
+                .where(SearchAlarm.workspace_id == workspace_id)
+                .where(SearchAlarm.is_active.is_(True))
+                .where(SearchAlarm.target_type.in_((target_type, "ANY")))
+            )
+        ).scalars().all()
+        for alarm in alarms:
+            fields = _alarm_visual_fields(alarm)
+            if not fields:
+                continue
+            if alarm.brand and extracted.brand and alarm.brand.lower() not in extracted.brand.lower():
+                continue
+            if alarm.reference and extracted.reference and alarm.reference.lower() not in extracted.reference.lower():
+                continue
+            if any(not _has_attr(getattr(extracted, field)) for field in fields):
+                return True
+        return False
 
     async def process_raw_message(self, raw_message_id: UUID) -> None:
         raw = (
@@ -90,20 +166,48 @@ class PipelineService:
 
         raw.processing_status = ProcessingStatus.PROCESSING
         try:
+            if await close_quoted_sold_offer(self.session, raw):
+                raw.processing_status = ProcessingStatus.COMPLETED
+                return
+
             settings = get_settings()
             caption_only = (raw.text_body or "").strip()
             text_for_parse = caption_only
+            has_img = _parse_has_image(raw)
+            cls_text = caption_only if (has_img and caption_only) else None
+            caption_parse_result: ParseResult | None = None
+            used_vision = False
             popped = await pop_pending_image(raw.id)
             if popped:
                 img_bytes, mime = popped
+                if caption_only:
+                    caption_parse_result = await self.parsing.parse(
+                        caption_only,
+                        has_image=has_img,
+                        classification_text=cls_text,
+                        caption_for_reference=caption_only,
+                        allow_llm=False,
+                    )
+                needs_vision = (
+                    caption_parse_result is None
+                    or not _caption_has_enough_match_data(caption_parse_result)
+                    or _caption_missing_image_visual_attrs(caption_parse_result)
+                    or await self._caption_missing_visual_for_active_alarm(caption_parse_result, raw.workspace_id)
+                )
                 if len(img_bytes) > settings.vision_max_image_bytes:
                     log.warning("vision_image_too_large", bytes=len(img_bytes))
+                elif not needs_vision:
+                    meta = dict(raw.metadata_json or {})
+                    meta["vision_skipped_reason"] = "caption_rule_extract_sufficient"
+                    raw.metadata_json = meta
+                    log.info("vision_skipped_caption_sufficient", raw_message_id=str(raw.id))
                 elif settings.vision_enabled and settings.openai_api_key:
                     try:
                         vision_snippet = await extract_watch_text_from_image(
                             img_bytes, mime, caption=text_for_parse
                         )
                         if vision_snippet.strip():
+                            used_vision = True
                             glue = "\n" if text_for_parse else ""
                             text_for_parse = (
                                 f"{text_for_parse}{glue}{vision_snippet.strip()}"
@@ -116,14 +220,16 @@ class PipelineService:
                 elif not settings.openai_api_key:
                     log.info("vision_skipped_no_openai_key_after_image_ingest")
 
-            has_img = _parse_has_image(raw)
-            cls_text = caption_only if (has_img and caption_only) else None
-            parse_result = await self.parsing.parse(
-                text_for_parse,
-                has_image=has_img,
-                classification_text=cls_text,
-                caption_for_reference=caption_only if caption_only else None,
-            )
+            if popped and not used_vision and caption_parse_result is not None:
+                parse_result = caption_parse_result
+            else:
+                parse_result = await self.parsing.parse(
+                    text_for_parse,
+                    has_image=has_img,
+                    classification_text=cls_text,
+                    caption_for_reference=caption_only if caption_only else None,
+                    allow_llm=not used_vision,
+                )
             parsed = await self._persist_parsed(raw, parse_result)
 
             if parse_result.classification.classification == MessageClassification.OTHER:
@@ -202,6 +308,12 @@ class PipelineService:
             manufacture_year=extracted.year,
             condition_raw=extracted.condition,
             set_completeness_raw=("full_set" if extracted.full_set else None),
+            dial_color=extracted.dial_color,
+            dial_variant=extracted.dial_variant,
+            bezel_color=extracted.bezel_color,
+            case_material=extracted.case_material,
+            bracelet_type=extracted.bracelet_type,
+            visual_confidence=extracted.visual_confidence,
             asking_price=Decimal(str(extracted.price)) if extracted.price else None,
             currency=extracted.currency,
             location_raw=extracted.location,
@@ -233,6 +345,12 @@ class PipelineService:
             family_raw=extracted.model_family,
             reference_raw=extracted.reference,
             condition_raw=extracted.condition,
+            dial_color=extracted.dial_color,
+            dial_variant=extracted.dial_variant,
+            bezel_color=extracted.bezel_color,
+            case_material=extracted.case_material,
+            bracelet_type=extracted.bracelet_type,
+            visual_confidence=extracted.visual_confidence,
             target_price=Decimal(str(extracted.price)) if has_price else None,
             currency=extracted.currency,
             location_raw=extracted.location,

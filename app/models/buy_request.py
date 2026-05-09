@@ -45,6 +45,12 @@ class BuyRequest(UUIDPKMixin, TimestampMixin, Base):
     family_raw: Mapped[str | None] = mapped_column(String(255), nullable=True)
     reference_raw: Mapped[str | None] = mapped_column(String(64), nullable=True)
     condition_raw: Mapped[str | None] = mapped_column(String(128), nullable=True)
+    dial_color: Mapped[str | None] = mapped_column(String(64), nullable=True, index=True)
+    dial_variant: Mapped[str | None] = mapped_column(String(64), nullable=True, index=True)
+    bezel_color: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    case_material: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    bracelet_type: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    visual_confidence: Mapped[float | None] = mapped_column(Numeric(5, 4), nullable=True)
 
     target_price: Mapped[Decimal | None] = mapped_column(Numeric(12, 2), nullable=True, index=True)
     max_price: Mapped[Decimal | None] = mapped_column(Numeric(12, 2), nullable=True)

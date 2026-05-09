@@ -1,0 +1,815 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>watchmatch - search alarms</title>
+  <style>
+    :root {
+      --bg: #0b1118;
+      --bg-soft: #101824;
+      --card: #172235;
+      --card-strong: #1f2d44;
+      --text: #edf3fb;
+      --muted: #a2b1c5;
+      --accent: #4f9cff;
+      --accent-strong: #7bb7ff;
+      --border: #2b3a50;
+      --ok: #3ecf8e;
+      --danger: #e35d6a;
+      --shadow: 0 18px 50px rgba(0, 0, 0, 0.28);
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+      background:
+        radial-gradient(circle at top left, rgba(62, 207, 142, 0.12), transparent 32rem),
+        linear-gradient(180deg, #0d1420 0%, var(--bg) 42rem);
+      color: var(--text);
+      line-height: 1.5;
+      min-height: 100vh;
+    }
+    header {
+      padding: 1.25rem clamp(1rem, 3vw, 2rem);
+      border-bottom: 1px solid var(--border);
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      gap: 1rem;
+      justify-content: space-between;
+      background: rgba(11, 17, 24, 0.78);
+      backdrop-filter: blur(14px);
+      position: sticky;
+      top: 0;
+      z-index: 5;
+    }
+    h1 { font-size: clamp(1.25rem, 2.8vw, 1.75rem); font-weight: 700; margin: 0; letter-spacing: -0.02em; }
+    h2 { margin: 0 0 0.5rem; font-size: 1rem; }
+    .note { font-size: 0.9rem; color: var(--muted); }
+    .topbar-title { display: flex; flex-direction: column; gap: 0.35rem; }
+    .topbar-actions { display: flex; align-items: center; gap: 0.75rem; }
+    .menu-toggle {
+      display: none;
+      background: var(--bg-soft);
+      color: var(--text);
+      border-color: var(--border);
+    }
+    nav { display: flex; gap: 0.5rem; flex-wrap: wrap; }
+    nav a {
+      color: var(--text);
+      text-decoration: none;
+      border: 1px solid var(--border);
+      padding: 0.55rem 0.9rem;
+      border-radius: 999px;
+      font-size: 0.875rem;
+      background: rgba(255, 255, 255, 0.03);
+    }
+    nav a:hover, nav a.active { border-color: var(--accent); color: var(--accent-strong); }
+    main { padding: 1rem clamp(0.75rem, 3vw, 2rem) 2rem; }
+    .grid {
+      display: grid;
+      grid-template-columns: minmax(18rem, 0.95fr) minmax(20rem, 1.25fr);
+      gap: 1rem;
+      align-items: start;
+    }
+    .alarm-workspace {
+      display: grid;
+      grid-template-columns: minmax(18rem, 24rem) minmax(0, 1fr);
+      gap: 1rem;
+      align-items: start;
+    }
+    .alarm-sidebar,
+    .alarm-results {
+      display: grid;
+      gap: 1rem;
+    }
+    .alarm-sidebar {
+      position: sticky;
+      top: 6.2rem;
+    }
+    .panel {
+      padding: clamp(0.9rem, 2vw, 1.2rem);
+      background: linear-gradient(180deg, rgba(31, 45, 68, 0.96), rgba(23, 34, 53, 0.96));
+      border: 1px solid var(--border);
+      border-radius: 18px;
+      box-shadow: var(--shadow);
+    }
+    .filters {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(10.5rem, 1fr));
+      gap: 0.75rem 1rem;
+      margin-top: 0.75rem;
+    }
+    .filters label { display: flex; flex-direction: column; gap: 0.35rem; font-size: 0.78rem; color: var(--muted); font-weight: 650; }
+    .filters input, .filters select {
+      width: 100%;
+      background: var(--bg-soft);
+      color: var(--text);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 0.6rem 0.7rem;
+      font-size: 1rem;
+      min-height: 2.65rem;
+      outline: none;
+    }
+    .filters input:focus, .filters select:focus {
+      border-color: var(--accent);
+      box-shadow: 0 0 0 3px rgba(79, 156, 255, 0.15);
+    }
+    .span2 { grid-column: span 2; }
+    .toolbar { display: flex; flex-wrap: wrap; gap: 0.5rem; align-items: center; }
+    button, .btn-link {
+      background: var(--accent);
+      color: #fff;
+      border: 1px solid var(--accent);
+      padding: 0.65rem 1rem;
+      border-radius: 10px;
+      cursor: pointer;
+      font-size: 0.95rem;
+      font-weight: 700;
+      min-height: 2.65rem;
+      text-decoration: none;
+      display: inline-flex;
+      align-items: center;
+    }
+    button:hover, .btn-link:hover { filter: brightness(1.08); }
+    button.secondary {
+      background: var(--bg-soft);
+      color: var(--text);
+      border-color: var(--border);
+    }
+    button.secondary:hover { border-color: var(--accent); }
+    #msg { font-size: 0.9rem; margin: 0.75rem 0; min-height: 1.3rem; }
+    #msg.error { color: var(--danger); }
+    #msg.ok { color: var(--ok); }
+    .alarm-list {
+      display: grid;
+      gap: 0.7rem;
+      margin-top: 0.75rem;
+      max-height: calc(100vh - 14rem);
+      overflow: auto;
+    }
+    .alarm-card, .trigger-card {
+      border: 1px solid var(--border);
+      border-radius: 14px;
+      background: rgba(11, 17, 24, 0.28);
+      padding: 0.85rem;
+    }
+    .alarm-card {
+      cursor: pointer;
+      transition: border-color 0.15s, background 0.15s, transform 0.15s;
+    }
+    .alarm-card:hover, .alarm-card.active {
+      border-color: var(--ok);
+      background: rgba(62, 207, 142, 0.08);
+      transform: translateY(-1px);
+    }
+    .alarm-head {
+      display: flex;
+      gap: 0.6rem;
+      align-items: flex-start;
+      justify-content: space-between;
+      flex-wrap: wrap;
+    }
+    .alarm-meta { color: var(--muted); font-size: 0.82rem; margin-top: 0.2rem; }
+    .badge {
+      display: inline-flex;
+      align-items: center;
+      border-radius: 999px;
+      padding: 0.18rem 0.55rem;
+      font-size: 0.72rem;
+      font-weight: 800;
+      letter-spacing: 0.04em;
+      text-transform: uppercase;
+      border: 1px solid var(--border);
+    }
+    .badge.active { color: #baf3d7; border-color: rgba(62, 207, 142, 0.55); background: rgba(62, 207, 142, 0.1); }
+    .badge.paused { color: #ffced4; border-color: rgba(227, 93, 106, 0.55); background: rgba(227, 93, 106, 0.1); }
+    .trigger-list {
+      display: grid;
+      gap: 0.8rem;
+      margin-top: 0.75rem;
+    }
+    .trigger-card pre {
+      margin: 0.6rem 0 0;
+      white-space: pre-wrap;
+      word-break: break-word;
+      color: var(--text);
+      font-family: ui-monospace, "SFMono-Regular", Menlo, monospace;
+      font-size: 0.82rem;
+    }
+    .context-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(12rem, 1fr));
+      gap: 0.55rem;
+      margin-top: 0.7rem;
+    }
+    .context-item {
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      background: rgba(11, 17, 24, 0.28);
+      padding: 0.55rem 0.65rem;
+    }
+    .context-item span {
+      display: block;
+      color: var(--muted);
+      font-size: 0.72rem;
+      font-weight: 800;
+      letter-spacing: 0.04em;
+      text-transform: uppercase;
+    }
+    .context-item strong {
+      display: block;
+      margin-top: 0.1rem;
+      word-break: break-word;
+    }
+    .empty {
+      padding: 1rem;
+      border: 1px dashed var(--border);
+      border-radius: 14px;
+      color: var(--muted);
+    }
+    details.panel > summary {
+      cursor: pointer;
+      font-weight: 800;
+      list-style: none;
+    }
+    details.panel > summary::-webkit-details-marker {
+      display: none;
+    }
+    details.panel > summary::after {
+      content: "Open";
+      float: right;
+      color: var(--accent-strong);
+      font-size: 0.8rem;
+      font-weight: 700;
+    }
+    details.panel[open] > summary::after {
+      content: "Close";
+    }
+    @media (max-width: 860px) {
+      header {
+        position: static;
+        align-items: stretch;
+      }
+      .topbar-actions, nav, nav a, .toolbar, .toolbar button {
+        width: 100%;
+      }
+      .topbar-actions {
+        align-items: stretch;
+        flex-direction: column;
+      }
+      .menu-toggle {
+        display: block;
+        width: 100%;
+      }
+      nav {
+        display: none;
+        flex-direction: column;
+      }
+      nav.open {
+        display: flex;
+      }
+      nav a, .toolbar button {
+        text-align: center;
+      }
+      .grid {
+        grid-template-columns: 1fr;
+      }
+      .alarm-workspace {
+        grid-template-columns: 1fr;
+      }
+      .alarm-sidebar {
+        position: static;
+      }
+      .alarm-list {
+        max-height: none;
+      }
+      .span2 {
+        grid-column: span 1;
+      }
+      .panel {
+        border-radius: 14px;
+      }
+      .alarm-head {
+        align-items: stretch;
+      }
+    }
+  </style>
+</head>
+<body>
+  <header>
+    <div class="topbar-title">
+      <h1>watchmatch - search alarms</h1>
+      <p class="note" style="margin:0.35rem 0 0;">
+        Save watch searches and open each alarm to see the messages that triggered it.
+      </p>
+    </div>
+    <div class="topbar-actions">
+      <button type="button" class="menu-toggle" id="menu-toggle">Menu</button>
+      <nav id="main-nav" aria-label="Primary navigation">
+        <a href="/dashboard">Alerts</a>
+        <a href="/listings">Listings</a>
+        <a href="/alarms" class="active">Alarms</a>
+      </nav>
+    </div>
+  </header>
+  <main>
+    <div id="msg" role="status"></div>
+    <div class="alarm-workspace">
+      <aside class="alarm-sidebar">
+      <section class="panel" aria-labelledby="list-heading">
+        <h2 id="list-heading">Saved alarms</h2>
+        <p class="note" style="margin:0;">
+          Select an alarm to show only its matched messages on the right.
+        </p>
+        <div class="toolbar" style="margin-top:0.75rem;">
+          <button type="button" class="secondary" id="btn-alarms-refresh">Refresh alarms</button>
+        </div>
+        <div id="alarms-list" class="alarm-list">
+          <div class="empty">Loading alarms...</div>
+        </div>
+      </section>
+
+      <details class="panel">
+        <summary>Create new alarm</summary>
+        <p class="note" style="margin:0.75rem 0 0;">
+          Choose SELL if you want alerts when someone sells a matching watch.
+        </p>
+        <form class="filters" id="alarm-form" autocomplete="off">
+          <label class="span2">Alarm name
+            <input type="text" id="a-name" placeholder="e.g. Rolex 326933 under 22k" maxlength="120" />
+          </label>
+          <label>Type
+            <select id="a-type">
+              <option value="SELL">I want to buy: alert when someone sells</option>
+              <option value="BUY">I want to sell: alert when someone wants to buy</option>
+              <option value="ANY">Both sell listings and buy requests</option>
+            </select>
+          </label>
+          <label>Brand contains
+            <input type="text" id="a-brand" placeholder="Rolex" maxlength="128" />
+          </label>
+          <label>Reference / model #
+            <input type="text" id="a-ref" placeholder="326933" maxlength="64" />
+          </label>
+          <label>Year min
+            <input type="number" id="a-ymin" min="1900" max="2099" step="1" placeholder="Any" />
+          </label>
+          <label>Year max
+            <input type="number" id="a-ymax" min="1900" max="2099" step="1" placeholder="Any" />
+          </label>
+          <label>Price min
+            <input type="number" id="a-pmin" min="0" step="any" placeholder="Any" />
+          </label>
+          <label>Price max
+            <input type="number" id="a-pmax" min="0" step="any" placeholder="Any" />
+          </label>
+          <label>Currency
+            <input type="text" id="a-cur" placeholder="GBP" maxlength="8" />
+          </label>
+          <label>Dial color
+            <select id="a-dial">
+              <option value="">Any</option>
+              <option value="black">Black</option>
+              <option value="white">White</option>
+              <option value="silver">Silver</option>
+              <option value="blue">Blue</option>
+              <option value="green">Green</option>
+              <option value="brown">Brown / chocolate</option>
+              <option value="grey">Grey / rhodium</option>
+              <option value="champagne">Champagne</option>
+              <option value="tiffany">Tiffany / turquoise</option>
+              <option value="panda">Panda</option>
+            </select>
+          </label>
+          <label>Bezel color
+            <select id="a-bezel">
+              <option value="">Any</option>
+              <option value="black">Black</option>
+              <option value="green">Green</option>
+              <option value="blue/black">Blue / black (Batman)</option>
+              <option value="red/blue">Red / blue (Pepsi)</option>
+              <option value="black/green">Black / green (Sprite)</option>
+              <option value="brown/black">Brown / black (Rootbeer)</option>
+            </select>
+          </label>
+          <label>Case material
+            <select id="a-case">
+              <option value="">Any</option>
+              <option value="steel">Steel</option>
+              <option value="yellow gold">Yellow gold</option>
+              <option value="rose gold">Rose gold</option>
+              <option value="white gold">White gold</option>
+              <option value="platinum">Platinum</option>
+              <option value="titanium">Titanium</option>
+              <option value="ceramic">Ceramic</option>
+              <option value="two-tone">Two-tone</option>
+            </select>
+          </label>
+          <label>Bracelet
+            <select id="a-bracelet">
+              <option value="">Any</option>
+              <option value="oyster">Oyster</option>
+              <option value="jubilee">Jubilee</option>
+              <option value="president">President</option>
+              <option value="rubber">Rubber / Oysterflex</option>
+              <option value="leather">Leather</option>
+            </select>
+          </label>
+          <div class="toolbar span2" style="align-self:end;">
+            <button type="submit">Create alarm</button>
+          </div>
+        </form>
+      </details>
+      </aside>
+
+      <section class="alarm-results">
+    <section class="panel" id="alarm-detail" aria-labelledby="detail-heading">
+      <div class="alarm-head">
+        <div>
+          <h2 id="detail-heading">Alarm matches</h2>
+          <p class="note" id="detail-subtitle" style="margin:0;">Select an alarm from the left.</p>
+        </div>
+        <div class="toolbar">
+          <button type="button" class="secondary" id="btn-detail-refresh" disabled>Refresh matches</button>
+          <button type="button" class="secondary" id="btn-delete-all-matches" disabled>Delete all matches</button>
+        </div>
+      </div>
+      <div id="triggers-list" class="trigger-list">
+        <div class="empty">No alarm selected.</div>
+      </div>
+    </section>
+      </section>
+    </div>
+  </main>
+  <script>
+    const API = "/api/v1";
+    let alarms = [];
+    let selectedAlarmId = new URLSearchParams(window.location.search).get("alarm") || "";
+
+    function setMsg(text, cls) {
+      const el = document.getElementById("msg");
+      el.textContent = text || "";
+      el.className = cls || "";
+    }
+
+    function escapeHtml(s) {
+      return String(s)
+        .replace(/&/g, "&amp;")
+        .replace(/</g, "&lt;")
+        .replace(/>/g, "&gt;")
+        .replace(/"/g, "&quot;");
+    }
+
+    function isMobileDevice() {
+      return /Android|iPhone|iPad|iPod/i.test(navigator.userAgent || "");
+    }
+
+    function inviteCodeFromUrl(url) {
+      try {
+        const parsed = new URL(url);
+        const parts = parsed.pathname.split("/").filter(Boolean);
+        return parts[parts.length - 1] || "";
+      } catch {
+        const parts = String(url || "").split("/").filter(Boolean);
+        return parts[parts.length - 1] || "";
+      }
+    }
+
+    function openWhatsAppGroup(url) {
+      if (!isMobileDevice()) {
+        window.open(url, "_blank", "noopener");
+        return;
+      }
+      const code = inviteCodeFromUrl(url);
+      if (!code) {
+        window.location.href = url;
+        return;
+      }
+      window.location.href = "whatsapp://chat?code=" + encodeURIComponent(code);
+    }
+
+    function alarmPayload() {
+      const payload = {
+        name: document.getElementById("a-name").value.trim(),
+        target_type: document.getElementById("a-type").value,
+        brand: document.getElementById("a-brand").value.trim() || null,
+        reference: document.getElementById("a-ref").value.trim() || null,
+        currency: document.getElementById("a-cur").value.trim() || null,
+        dial_color: document.getElementById("a-dial").value || null,
+        bezel_color: document.getElementById("a-bezel").value || null,
+        case_material: document.getElementById("a-case").value || null,
+        bracelet_type: document.getElementById("a-bracelet").value || null,
+      };
+      for (const [id, key] of [["a-ymin", "year_min"], ["a-ymax", "year_max"], ["a-pmin", "price_min"], ["a-pmax", "price_max"]]) {
+        const raw = document.getElementById(id).value.trim();
+        payload[key] = raw === "" ? null : Number(raw);
+      }
+      return payload;
+    }
+
+    function alarmParts(a) {
+      return [
+        a.target_type,
+        a.brand ? "brand: " + a.brand : null,
+        a.reference ? "ref: " + a.reference : null,
+        a.year_min || a.year_max ? "year: " + (a.year_min || "...") + "-" + (a.year_max || "...") : null,
+        a.price_min || a.price_max ? "price: " + (a.price_min || "...") + "-" + (a.price_max || "...") : null,
+        a.currency ? "currency: " + a.currency : null,
+        a.dial_color ? "dial: " + a.dial_color : null,
+        a.bezel_color ? "bezel: " + a.bezel_color : null,
+        a.case_material ? "case: " + a.case_material : null,
+        a.bracelet_type ? "bracelet: " + a.bracelet_type : null,
+      ].filter(Boolean).join(" · ");
+    }
+
+    function renderAlarm(a) {
+      const active = a.id === selectedAlarmId ? " active" : "";
+      const badge = a.is_active
+        ? `<span class="badge active">Active</span>`
+        : `<span class="badge paused">Paused</span>`;
+      const last = a.last_triggered_at ? " · last: " + new Date(a.last_triggered_at).toLocaleString() : "";
+      return `<article class="alarm-card${active}" data-id="${escapeHtml(a.id)}" tabindex="0">
+        <div class="alarm-head">
+          <div>
+            <strong>${escapeHtml(a.name)}</strong>
+            <div class="alarm-meta">${escapeHtml(alarmParts(a))}${escapeHtml(last)}</div>
+          </div>
+          ${badge}
+        </div>
+        <div class="toolbar" style="margin-top:0.7rem;">
+          <button type="button" class="secondary" data-alarm-act="toggle">${a.is_active ? "Disable" : "Enable"}</button>
+          <button type="button" class="secondary" data-alarm-act="delete">Delete</button>
+        </div>
+      </article>`;
+    }
+
+    function bindAlarmEvents() {
+      document.querySelectorAll(".alarm-card").forEach((card) => {
+        card.addEventListener("click", () => selectAlarm(card.dataset.id));
+        card.addEventListener("keydown", (e) => {
+          if (e.key === "Enter" || e.key === " ") {
+            e.preventDefault();
+            selectAlarm(card.dataset.id);
+          }
+        });
+      });
+      document.querySelectorAll("[data-alarm-act]").forEach((btn) => {
+        btn.addEventListener("click", (e) => {
+          e.stopPropagation();
+          onAlarmAction(btn.closest(".alarm-card").dataset.id, btn.dataset.alarmAct);
+        });
+      });
+    }
+
+    async function loadAlarms() {
+      const box = document.getElementById("alarms-list");
+      try {
+        const res = await fetch(API + "/search-alarms?limit=100", { credentials: "same-origin" });
+        if (!res.ok) throw new Error(await res.text());
+        const data = await res.json();
+        alarms = data.items || [];
+        if (selectedAlarmId && !alarms.some((a) => a.id === selectedAlarmId)) selectedAlarmId = "";
+        if (!selectedAlarmId && alarms.length) selectedAlarmId = alarms[0].id;
+        box.innerHTML = alarms.length
+          ? alarms.map(renderAlarm).join("")
+          : `<div class="empty">No search alarms yet.</div>`;
+        bindAlarmEvents();
+        if (selectedAlarmId) await loadTriggers(selectedAlarmId);
+        if (!alarms.length) {
+          document.getElementById("detail-subtitle").textContent = "Create an alarm to start collecting matches.";
+          document.getElementById("triggers-list").innerHTML = `<div class="empty">No alarm selected.</div>`;
+          document.getElementById("btn-detail-refresh").disabled = true;
+          document.getElementById("btn-delete-all-matches").disabled = true;
+        }
+      } catch (e) {
+        box.innerHTML = `<div class="empty">Could not load alarms: ${escapeHtml(e)}</div>`;
+      }
+    }
+
+    async function selectAlarm(id) {
+      selectedAlarmId = id;
+      const url = new URL(window.location.href);
+      url.searchParams.set("alarm", id);
+      window.history.replaceState({}, "", url);
+      document.querySelectorAll(".alarm-card").forEach((card) => {
+        card.classList.toggle("active", card.dataset.id === id);
+      });
+      await loadTriggers(id);
+    }
+
+    async function openAlarmMatches(id) {
+      if (!id) return;
+      if (!alarms.some((a) => a.id === id)) {
+        await loadAlarms();
+      }
+      await selectAlarm(id);
+      document.getElementById("alarm-detail").scrollIntoView({ behavior: "smooth", block: "start" });
+    }
+
+    async function loadTriggers(id) {
+      const alarm = alarms.find((a) => a.id === id);
+      document.getElementById("btn-detail-refresh").disabled = false;
+      document.getElementById("btn-delete-all-matches").disabled = false;
+      document.getElementById("detail-subtitle").textContent = alarm
+        ? alarm.name + " - " + alarmParts(alarm)
+        : "Loading matches...";
+      const box = document.getElementById("triggers-list");
+      box.innerHTML = `<div class="empty">Loading matches...</div>`;
+      try {
+        const res = await fetch(API + "/search-alarms/" + encodeURIComponent(id) + "/alerts?limit=100", { credentials: "same-origin" });
+        if (!res.ok) throw new Error(await res.text());
+        const data = await res.json();
+        box.innerHTML = data.items && data.items.length
+          ? data.items.map(renderTrigger).join("")
+          : `<div class="empty">No matches have triggered this alarm yet.</div>`;
+        bindTriggerActions();
+      } catch (e) {
+        box.innerHTML = `<div class="empty">Could not load alarm matches: ${escapeHtml(e)}</div>`;
+      }
+    }
+
+    function renderTrigger(t) {
+      const when = new Date(t.created_at).toLocaleString();
+      const messageAt = t.message_at ? new Date(t.message_at).toLocaleString() : "Unknown";
+      const msg = t.seller_message_text || t.buyer_message_text || "";
+      const summary = t.summary || "";
+      const copyInfo = [t.group_name, t.sender_name || t.sender_external_id, messageAt].filter(Boolean).join(" | ");
+      const inviteCode = t.group_invite_url ? inviteCodeFromUrl(t.group_invite_url) : "";
+      const groupHref = isMobileDevice() && inviteCode
+        ? "whatsapp://chat?code=" + encodeURIComponent(inviteCode)
+        : t.group_invite_url;
+      const groupLink = t.group_invite_url
+        ? `<a class="btn-link" href="${escapeHtml(groupHref)}" data-open-whatsapp-group="${escapeHtml(t.group_invite_url)}">Open group in WhatsApp</a>`
+        : "";
+      const markSeen = t.status === "ACKNOWLEDGED"
+        ? ""
+        : `<button type="button" class="secondary" data-ack-trigger="${escapeHtml(t.id)}">Mark seen</button>`;
+      return `<article class="trigger-card">
+        <div class="alarm-head">
+          <strong>${escapeHtml(when)}</strong>
+          <span class="badge active">${escapeHtml(t.status)}</span>
+        </div>
+        <div class="context-grid">
+          <div class="context-item"><span>Posted by</span><strong>${escapeHtml(t.sender_name || t.sender_external_id || "Unknown sender")}</strong></div>
+          <div class="context-item"><span>WhatsApp group</span><strong>${escapeHtml(t.group_name || "Unknown group")}</strong></div>
+          <div class="context-item"><span>Message time</span><strong>${escapeHtml(messageAt)}</strong></div>
+          <div class="context-item"><span>Message id</span><strong>${escapeHtml(t.external_message_id || "Not available")}</strong></div>
+        </div>
+        ${summary ? `<pre>${escapeHtml(summary)}</pre>` : ""}
+        ${msg ? `<pre>${escapeHtml(msg)}</pre>` : ""}
+        <div class="toolbar" style="margin-top:0.7rem;">
+          ${groupLink}
+          ${isMobileDevice() ? `<a class="btn-link" href="whatsapp://">Open WhatsApp app</a>` : `<button type="button" data-open-url="https://web.whatsapp.com/">Open WhatsApp Web</button>`}
+          ${msg ? `<button type="button" class="secondary" data-copy-text="${escapeHtml(encodeURIComponent(msg))}">Copy original message</button>` : ""}
+          <button type="button" class="secondary" data-copy-text="${escapeHtml(encodeURIComponent(copyInfo))}">Copy search info</button>
+          ${markSeen}
+          <button type="button" class="secondary" data-delete-trigger="${escapeHtml(t.id)}">Delete match</button>
+        </div>
+      </article>`;
+    }
+
+    function bindTriggerActions() {
+      document.querySelectorAll("[data-open-whatsapp-group]").forEach((btn) => {
+        btn.addEventListener("click", (event) => {
+          event.preventDefault();
+          openWhatsAppGroup(btn.dataset.openWhatsappGroup);
+        });
+      });
+      document.querySelectorAll("[data-open-url]").forEach((btn) => {
+        btn.addEventListener("click", () => window.open(btn.dataset.openUrl, "_blank", "noopener"));
+      });
+      document.querySelectorAll("[data-copy-text]").forEach((btn) => {
+        btn.addEventListener("click", async () => {
+          try {
+            await navigator.clipboard.writeText(decodeURIComponent(btn.dataset.copyText || ""));
+            setMsg("Copied to clipboard.", "ok");
+          } catch (e) {
+            setMsg("Could not copy: " + e, "error");
+          }
+        });
+      });
+      document.querySelectorAll("[data-delete-trigger]").forEach((btn) => {
+        btn.addEventListener("click", () => deleteTrigger(btn.dataset.deleteTrigger));
+      });
+      document.querySelectorAll("[data-ack-trigger]").forEach((btn) => {
+        btn.addEventListener("click", () => acknowledgeTrigger(btn.dataset.ackTrigger));
+      });
+    }
+
+    async function acknowledgeTrigger(id) {
+      const res = await fetch(API + "/alerts/" + encodeURIComponent(id) + "/acknowledge", {
+        method: "POST",
+        credentials: "same-origin",
+      });
+      if (!res.ok) {
+        setMsg(await res.text(), "error");
+        return;
+      }
+      setMsg("Alarm match marked seen.", "ok");
+      if (selectedAlarmId) await loadTriggers(selectedAlarmId);
+    }
+
+    async function deleteTrigger(id) {
+      if (!id || !confirm("Delete this alarm match from the UI?")) return;
+      const res = await fetch(API + "/alerts/" + encodeURIComponent(id), {
+        method: "DELETE",
+        credentials: "same-origin",
+      });
+      if (!res.ok && res.status !== 204) {
+        setMsg(await res.text(), "error");
+        return;
+      }
+      setMsg("Alarm match deleted.", "ok");
+      if (selectedAlarmId) await loadTriggers(selectedAlarmId);
+    }
+
+    async function deleteAllTriggers() {
+      if (!selectedAlarmId) return;
+      const alarm = alarms.find((a) => a.id === selectedAlarmId);
+      const name = alarm ? alarm.name : "this alarm";
+      if (!confirm("Delete all alarm matches for " + name + "?")) return;
+      const res = await fetch(API + "/search-alarms/" + encodeURIComponent(selectedAlarmId) + "/alerts", {
+        method: "DELETE",
+        credentials: "same-origin",
+      });
+      if (!res.ok) {
+        setMsg(await res.text(), "error");
+        return;
+      }
+      const data = await res.json();
+      setMsg("Deleted " + (data.deleted || 0) + " alarm matches.", "ok");
+      await loadTriggers(selectedAlarmId);
+    }
+
+    async function onAlarmAction(id, act) {
+      if (act === "delete") {
+        if (!confirm("Delete this search alarm? Its historical alert records will remain until retention cleanup.")) return;
+        const res = await fetch(API + "/search-alarms/" + encodeURIComponent(id), { method: "DELETE", credentials: "same-origin" });
+        if (!res.ok && res.status !== 204) {
+          setMsg(await res.text(), "error");
+          return;
+        }
+        if (selectedAlarmId === id) {
+          selectedAlarmId = "";
+          window.history.replaceState({}, "", "/alarms");
+          document.getElementById("detail-subtitle").textContent = "Select an alarm from the left.";
+          document.getElementById("triggers-list").innerHTML = `<div class="empty">No alarm selected.</div>`;
+          document.getElementById("btn-detail-refresh").disabled = true;
+          document.getElementById("btn-delete-all-matches").disabled = true;
+        }
+      } else {
+        const alarm = alarms.find((a) => a.id === id);
+        const res = await fetch(API + "/search-alarms/" + encodeURIComponent(id), {
+          method: "PATCH",
+          credentials: "same-origin",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ is_active: !(alarm && alarm.is_active) }),
+        });
+        if (!res.ok) {
+          setMsg(await res.text(), "error");
+          return;
+        }
+      }
+      await loadAlarms();
+    }
+
+    document.getElementById("alarm-form").addEventListener("submit", async (e) => {
+      e.preventDefault();
+      const payload = alarmPayload();
+      if (!payload.name) {
+        setMsg("Alarm name is required.", "error");
+        return;
+      }
+      const res = await fetch(API + "/search-alarms", {
+        method: "POST",
+        credentials: "same-origin",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      });
+      if (!res.ok) {
+        setMsg("Alarm API " + res.status + " " + (await res.text()).slice(0, 200), "error");
+        return;
+      }
+      const alarm = await res.json();
+      document.getElementById("alarm-form").reset();
+      setMsg("Search alarm created.", "ok");
+      selectedAlarmId = alarm.id;
+      await loadAlarms();
+      await selectAlarm(alarm.id);
+    });
+    document.getElementById("btn-alarms-refresh").addEventListener("click", loadAlarms);
+    document.getElementById("btn-detail-refresh").addEventListener("click", () => {
+      if (selectedAlarmId) loadTriggers(selectedAlarmId);
+    });
+    document.getElementById("btn-delete-all-matches").addEventListener("click", deleteAllTriggers);
+    document.getElementById("menu-toggle").addEventListener("click", () => {
+      document.getElementById("main-nav").classList.toggle("open");
+    });
+
+    loadAlarms();
+  </script>
+</body>
+</html>

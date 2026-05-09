@@ -33,6 +33,12 @@ Schema keys (all optional except `classification`):
 - condition (string|null) — one of: new, mint, excellent, good, worn
 - full_set (boolean|null)
 - year (integer|null) — manufacturing or warranty-card year (19xx–20xx, or year from DD.MM.YYYY on papers). Never use a plain 4-digit year as `reference`.
+- dial_color (string|null) — normalized base dial color, e.g. black, white, blue, green, grey, pink, champagne, rose gold
+- dial_variant (string|null) — named dial variant/pattern, e.g. azzurro, palm, wimbledon, sundust, rhodium, slate, tiffany, ice blue, panda, motif
+- bezel_color (string|null) — normalized bezel color or combination, e.g. black, green, blue/black, red/blue, brown/black
+- case_material (string|null) — steel, yellow gold, rose gold, white gold, platinum, ceramic, two-tone
+- bracelet_type (string|null) — oyster, jubilee, president, rubber, leather
+- visual_confidence (number|null) — confidence for visual/color attributes only, 0..1
 - price (number|null)
 - currency (string|null)
 - negotiable (boolean|null)

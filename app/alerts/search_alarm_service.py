@@ -6,10 +6,11 @@ from decimal import Decimal
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.alerts.telegram import TelegramClient
+from app.alerts.formatter import append_single_original_message_to_summary
+from app.alerts.telegram import TelegramClient, stored_message_photo_path
 from app.core.config import get_settings
 from app.core.enums import AlertChannel, AlertStatus, AlertType
-from app.models import Alert, BuyRequest, ParsedMessage, RawMessage, SearchAlarm, SellOffer
+from app.models import Alert, BuyRequest, Group, ParsedMessage, RawMessage, SearchAlarm, SellOffer
 
 
 def _contains(actual: str | None, wanted: str | None) -> bool:
@@ -42,6 +43,12 @@ def _year_matches(year: int | None, alarm: SearchAlarm) -> bool:
     return True
 
 
+def _visual_matches(actual: str | None, wanted: str | None) -> bool:
+    if not wanted:
+        return True
+    return bool(actual) and actual.strip().lower() == wanted.strip().lower()
+
+
 class SearchAlarmService:
     def __init__(self, session: AsyncSession, telegram: TelegramClient | None = None) -> None:
         self.session = session
@@ -58,6 +65,12 @@ class SearchAlarmService:
             year=offer.manufacture_year,
             price=offer.asking_price,
             currency=offer.currency,
+            visual_attrs={
+                "dial_color": offer.dial_color,
+                "bezel_color": offer.bezel_color,
+                "case_material": offer.case_material,
+                "bracelet_type": offer.bracelet_type,
+            },
             title="Sell listing alarm",
             side_label="Seller",
         )
@@ -74,6 +87,12 @@ class SearchAlarmService:
             year=year if isinstance(year, int) else None,
             price=request.target_price,
             currency=request.currency,
+            visual_attrs={
+                "dial_color": request.dial_color,
+                "bezel_color": request.bezel_color,
+                "case_material": request.case_material,
+                "bracelet_type": request.bracelet_type,
+            },
             title="Buy request alarm",
             side_label="Buyer",
         )
@@ -88,6 +107,7 @@ class SearchAlarmService:
         year: int | None,
         price: Decimal | None,
         currency: str | None,
+        visual_attrs: dict[str, str | None],
         title: str,
         side_label: str,
     ) -> list[Alert]:
@@ -103,7 +123,7 @@ class SearchAlarmService:
         ).scalars().all()
         out: list[Alert] = []
         for alarm in alarms:
-            if not self._matches_alarm(alarm, brand, reference, year, price, currency):
+            if not self._matches_alarm(alarm, brand, reference, year, price, currency, visual_attrs):
                 continue
             if await self._already_alerted(alarm, raw):
                 continue
@@ -118,6 +138,7 @@ class SearchAlarmService:
                 year=year,
                 price=price,
                 currency=currency,
+                visual_attrs=visual_attrs,
             )
             out.append(alert)
         return out
@@ -130,12 +151,21 @@ class SearchAlarmService:
         year: int | None,
         price: Decimal | None,
         currency: str | None,
+        visual_attrs: dict[str, str | None],
     ) -> bool:
         if not _contains(brand, alarm.brand):
             return False
         if not _contains(reference, alarm.reference):
             return False
         if alarm.currency and (currency or "").upper() != alarm.currency.upper():
+            return False
+        if not _visual_matches(visual_attrs.get("dial_color"), alarm.dial_color):
+            return False
+        if not _visual_matches(visual_attrs.get("bezel_color"), alarm.bezel_color):
+            return False
+        if not _visual_matches(visual_attrs.get("case_material"), alarm.case_material):
+            return False
+        if not _visual_matches(visual_attrs.get("bracelet_type"), alarm.bracelet_type):
             return False
         return _year_matches(year, alarm) and _price_matches(price, alarm)
 
@@ -162,15 +192,29 @@ class SearchAlarmService:
         year: int | None,
         price: Decimal | None,
         currency: str | None,
+        visual_attrs: dict[str, str | None],
     ) -> Alert:
         price_text = f"{price} {currency or ''}".strip() if price is not None else "no price"
-        summary = (
+        visual_text = ", ".join(
+            f"{k.replace('_', ' ')}: {v}" for k, v in visual_attrs.items() if v
+        ) or "unknown"
+        headline = (
+            f"SEARCH ALARM TRIGGERED\n"
             f"{title}: {alarm.name}\n"
             f"  type: {target_type}\n"
             f"  watch: {brand or 'Unknown brand'} {reference or 'Unknown ref'}\n"
             f"  year: {year or 'unknown'}\n"
-            f"  price: {price_text}\n\n"
-            f"--- {side_label} original message ---\n{(raw.text_body or '').strip()}"
+            f"  price: {price_text}\n"
+            f"  visual: {visual_text}"
+        )
+        group = await self.session.get(Group, raw.group_id)
+        summary = append_single_original_message_to_summary(
+            headline,
+            side_label,
+            (raw.text_body or "").strip(),
+            sender_name=raw.sender_name,
+            group_name=group.group_name if group else None,
+            message_at=raw.original_timestamp,
         )
         alert = Alert(
             workspace_id=raw.workspace_id,
@@ -182,6 +226,7 @@ class SearchAlarmService:
                 "search_alarm_id": str(alarm.id),
                 "search_alarm_name": alarm.name,
                 "target_type": target_type,
+                "visual_attributes": visual_attrs,
                 "seller_message_text": raw.text_body if target_type == "SELL" else None,
                 "buyer_message_text": raw.text_body if target_type == "BUY" else None,
             },
@@ -196,6 +241,13 @@ class SearchAlarmService:
                 text=summary,
             )
             if sent:
+                photo = stored_message_photo_path(raw.metadata_json)
+                if photo:
+                    await self.telegram.send_photo(
+                        chat_id=self.settings.telegram_default_chat_id,
+                        photo_path=photo,
+                        caption=f"{side_label} picture",
+                    )
                 alert.channel = AlertChannel.TELEGRAM
                 alert.status = AlertStatus.SENT
                 alert.sent_at = datetime.now(timezone.utc)

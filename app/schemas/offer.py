@@ -22,6 +22,12 @@ class SellOfferOut(BaseModel):
     reference_raw: str | None
     manufacture_year: int | None = None
     condition_raw: str | None
+    dial_color: str | None = None
+    dial_variant: str | None = None
+    bezel_color: str | None = None
+    case_material: str | None = None
+    bracelet_type: str | None = None
+    visual_confidence: float | None = None
     asking_price: Decimal | None
     currency: str | None
     seller_name: str | None

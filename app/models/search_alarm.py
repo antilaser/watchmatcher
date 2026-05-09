@@ -34,6 +34,10 @@ class SearchAlarm(UUIDPKMixin, TimestampMixin, Base):
     price_min: Mapped[Decimal | None] = mapped_column(Numeric(12, 2), nullable=True)
     price_max: Mapped[Decimal | None] = mapped_column(Numeric(12, 2), nullable=True)
     currency: Mapped[str | None] = mapped_column(String(8), nullable=True)
+    dial_color: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    bezel_color: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    case_material: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    bracelet_type: Mapped[str | None] = mapped_column(String(64), nullable=True)
 
     extra_json: Mapped[dict] = mapped_column(JSONB, nullable=False, default=dict)
     last_triggered_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)

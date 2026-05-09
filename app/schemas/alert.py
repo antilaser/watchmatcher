@@ -5,7 +5,7 @@ from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict
 
-from app.core.enums import AlertChannel, AlertStatus, AlertType
+from app.core.enums import AlertChannel, AlertStatus, AlertType, MatchStatus
 
 
 class AlertGroupRef(BaseModel):
@@ -40,7 +40,13 @@ class AlertListItemOut(AlertOut):
     buy_group: AlertGroupRef | None = None
     seller_message_text: str | None = None
     buyer_message_text: str | None = None
+    seller_message_at: datetime | None = None
+    buyer_message_at: datetime | None = None
+    seller_image_url: str | None = None
+    buyer_image_url: str | None = None
+    match_status: MatchStatus | None = None
     match_human_feedback: str | None = None
+    match_human_feedback_note: str | None = None
 
 
 class SnoozeRequest(BaseModel):
